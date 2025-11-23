@@ -1,0 +1,21 @@
+Protocol used: TCP
+
+Multi clients tech: Threads
+
+Databases: 
+    - accounts: id - username - password - account_status(active/banned) - user_state(online/offline)
+    
+    - friend_requests: request_id - sender_id(FK id accounts) - receiver_id(FK id accounts) - status(pending/accepted/rejected) - timestamp
+    
+    - friend_lists: id1(FK id accounts) - id2(FK id accounts) - friendship_date
+    
+    - groups: group_id - group_name - created_by(FK id accounts) - created_at
+    
+    - group_members: group_id(FK group_id groups) - user_id(FK id accounts) - role(admin/member) - joined_at
+    
+    - messages: message_id - sender_id(FK id accounts) - receiver_id(FK id accounts, NULL if group) - group_id(FK group_id groups, NULL if direct) - content - timestamp - read_status(read/unread) - is_offline(0/1)
+    
+    - sessions: session_id - user_id(FK id accounts) - socket_fd
+    
+    - activity_logs: log_id - user_id(FK id accounts) - action_type - details - timestamp
+    
