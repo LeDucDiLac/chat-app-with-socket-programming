@@ -1,4 +1,4 @@
-- Xử lý truyền dòng: 1 điểm - Hiếu
+- Xử lý truyền dòng: 1 điểm - Đức
 - Cài đặt cơ chế vào/ra socket trên server: 2 điểm - Đức
 - Đăng ký và quản lý tài khoản: 2 điểm - Đức
 - Đăng nhập và quản lý phiên: 2 điểm - Đức
@@ -11,7 +11,7 @@
 - Tạo nhóm chat: 1 điểm - Hiếu  
 - Thêm người dùng khác vào nhóm chat: 1 điểm - Hiếu
 - Xóa người dùng ra khỏi nhóm chat: 1 điểm - Hiếu
-- Rời nhóm chat: 1 điểm - Đức
-- Gửi nhận thông điệp trong nhóm chat: 1 điểm - Đức
-- Gửi tin nhắn offline: 1 điểm - Hiếu
+- Rời nhóm chat: 1 điểm - Hiếu
+- Gửi nhận thông điệp trong nhóm chat: 1 điểm - Hiếu
+- Gửi tin nhắn offline: 1 điểm - Đức
 - Ghi log hoạt động: 1 điểm - Hiếu

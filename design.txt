@@ -19,3 +19,118 @@ Databases:
     
     - activity_logs: log_id - user_id(FK id accounts) - action_type - details - timestamp
     
+
+Protocol Design:
+================
+
+Packet Format (Fixed Header + Variable Payload):
+    [TYPE:2bytes][LENGTH:4bytes][PAYLOAD:variable]
+    - TYPE: Command code (uint16_t)
+    - LENGTH: Payload length in bytes (uint32_t)
+    - PAYLOAD: Data (format depends on TYPE)
+
+Status Codes (Server Response):
+    200 - SUCCESS
+    201 - CREATED (new resource created)
+    400 - BAD_REQUEST (invalid format/data)
+    401 - UNAUTHORIZED (authentication failed)
+    403 - FORBIDDEN (banned or insufficient permissions)
+    404 - NOT_FOUND (user/group/message not found)
+    409 - CONFLICT (username exists, already friends, etc.)
+    500 - SERVER_ERROR
+
+Command Types (Client -> Server):
+    1000 - REGISTER
+    1001 - LOGIN
+    1002 - LOGOUT
+    1003 - SEND_MESSAGE
+    1004 - SEND_GROUP_MESSAGE
+    1005 - SEND_FRIEND_REQUEST
+    1006 - ACCEPT_FRIEND_REQUEST
+    1007 - REJECT_FRIEND_REQUEST
+    1008 - UNFRIEND
+    1009 - GET_FRIEND_LIST
+    1010 - CREATE_GROUP
+    1011 - ADD_TO_GROUP
+    1012 - REMOVE_FROM_GROUP
+    1013 - LEAVE_GROUP
+    1014 - GET_OFFLINE_MESSAGES
+
+Command Types (Server -> Client):
+    2000 - RESPONSE (general status response)
+    2001 - MESSAGE_RECEIVED (incoming message)
+    2002 - GROUP_MESSAGE_RECEIVED
+    2003 - FRIEND_REQUEST_RECEIVED
+    2004 - FRIEND_LIST_DATA
+    2005 - OFFLINE_MESSAGES_DATA
+    2006 - USER_STATUS_UPDATE (friend went online/offline)
+
+Payload Formats:
+----------------
+
+REGISTER (1000):
+    Request:  username|password
+    Response: [200|user_id] or [409|Username already exists]
+
+LOGIN (1001):
+    Request:  username|password
+    Response: [200|user_id|username] or [401|Invalid credentials] or [403|Account banned]
+
+LOGOUT (1002):
+    Request:  (empty)
+    Response: [200|Logged out successfully]
+
+SEND_MESSAGE (1003):
+    Request:  receiver_id|message_content
+    Response: [200|Message sent] or [404|User not found]
+    Server->Receiver: [2001|sender_id|sender_username|message_content|timestamp]
+
+SEND_GROUP_MESSAGE (1004):
+    Request:  group_id|message_content
+    Response: [200|Message sent] or [404|Group not found] or [403|Not a member]
+    Server->Members: [2002|group_id|group_name|sender_id|sender_username|message_content|timestamp]
+
+SEND_FRIEND_REQUEST (1005):
+    Request:  target_username
+    Response: [200|Request sent] or [404|User not found] or [409|Already friends/pending]
+    Server->Target: [2003|sender_id|sender_username|timestamp]
+
+ACCEPT_FRIEND_REQUEST (1006):
+    Request:  request_id
+    Response: [200|Friend added] or [404|Request not found]
+
+REJECT_FRIEND_REQUEST (1007):
+    Request:  request_id
+    Response: [200|Request rejected] or [404|Request not found]
+
+UNFRIEND (1008):
+    Request:  friend_id
+    Response: [200|Unfriended] or [404|Not friends]
+
+GET_FRIEND_LIST (1009):
+    Request:  (empty)
+    Response: [2004|count|friend1_id|friend1_username|friend1_status|friend2_id|friend2_username|friend2_status|...]
+
+CREATE_GROUP (1010):
+    Request:  group_name
+    Response: [201|group_id|group_name] or [400|Invalid name]
+
+ADD_TO_GROUP (1011):
+    Request:  group_id|user_id
+    Response: [200|User added] or [403|Not admin] or [404|Group/User not found]
+
+REMOVE_FROM_GROUP (1012):
+    Request:  group_id|user_id
+    Response: [200|User removed] or [403|Not admin] or [404|Group/User not found]
+
+LEAVE_GROUP (1013):
+    Request:  group_id
+    Response: [200|Left group] or [404|Group not found]
+
+GET_OFFLINE_MESSAGES (1014):
+    Request:  (empty)
+    Response: [2005|count|msg1_sender_id|msg1_sender_name|msg1_content|msg1_timestamp|msg2_...|...]
+
+USER_STATUS_UPDATE (2006):
+    Server->Client: [user_id|username|new_status(online/offline)]
+
