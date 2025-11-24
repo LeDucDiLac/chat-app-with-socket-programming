@@ -1,8 +1,0 @@
-1|1|2|NULL|Hey Bob, how are you?|1732300000|read|0
-2|2|1|NULL|I'm good Alice, thanks!|1732300100|read|0
-3|3|1|NULL|Hi Alice!|1732300200|unread|1
-4|1|NULL|1|Welcome to Study Group everyone|1732300300|read|0
-5|2|NULL|1|Thanks for adding me!|1732300400|read|0
-6|4|1|NULL|Can we talk later?|1732300500|unread|1
-7|2|NULL|2|Ready to play?|1732300600|read|0
-8|3|NULL|2|Let's go!|1732300700|read|0

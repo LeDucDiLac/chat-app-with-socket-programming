@@ -1,6 +1,9 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -I$(SERVER_DIR)
+CXX = g++
+CFLAGS = -Wall -Wextra -I$(SERVER_DIR) -Ilibs
+CXXFLAGS = -Wall -Wextra -std=c++11 -I$(SERVER_DIR) -Ilibs
 LDFLAGS =
+LDFLAGS_SQLITE = -lsqlite3
 
 # Directories
 SERVER_DIR = src/TCP_Server
@@ -10,6 +13,9 @@ CLIENT_DIR = src/TCP_Client
 SERVER_SRC = $(SERVER_DIR)/server.c
 CLIENT_SRC = $(CLIENT_DIR)/client.c
 UTILS_SRC = $(SERVER_DIR)/tcp_utils.c
+
+TEST_SRC= $(SERVER_DIR)/test.c
+TEST_JSON_SRC= $(SERVER_DIR)/test_json.cpp
 
 # Output executables
 SERVER_BIN = server
@@ -28,11 +34,17 @@ client: $(CLIENT_SRC) $(UTILS_SRC)
 
 # Clean compiled files
 clean:
-	rm -f $(SERVER_BIN) $(CLIENT_BIN)
+	rm -f $(SERVER_BIN) $(CLIENT_BIN) test test_json
 	rm -f $(SERVER_DIR)/*.o $(CLIENT_DIR)/*.o
 
 # Clean and rebuild
 rebuild: clean all
+
+test: $(TEST_SRC)
+	$(CC) -o test $(TEST_SRC) $(LDFLAGS_SQLITE)
+
+test-json: $(TEST_JSON_SRC)
+	$(CXX) $(CXXFLAGS) -o test_json $(TEST_JSON_SRC) $(LDFLAGS_SQLITE)
 
 # Run server (example)
 run-server: server
@@ -42,4 +54,4 @@ run-server: server
 run-client: client
 	./$(CLIENT_BIN) 127.0.0.1 5550
 
-.PHONY: all server client clean rebuild run-server run-client
+.PHONY: all server client clean rebuild run-server run-client test test-json

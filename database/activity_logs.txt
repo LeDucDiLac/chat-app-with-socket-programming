@@ -1,7 +1,0 @@
-1|2|login|User logged in from socket 5|1732300000
-2|1|send_message|Sent message to user 2|1732300050
-3|3|join_group|Joined group 1|1732300100
-4|2|send_friend_request|Sent friend request to user 5|1732300150
-5|4|create_group|Created group 3|1732300200
-6|1|accept_friend_request|Accepted friend request from user 4|1732300250
-7|3|logout|User logged out|1732300300
