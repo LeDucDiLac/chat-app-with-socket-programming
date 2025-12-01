@@ -81,8 +81,8 @@ static int recv_all(int socket_fd, void *buffer, size_t length)
 }
 
 /**
- * Send a JSON packet with length prefix
- * Format: [LENGTH:4bytes in network byte order][JSON string]
+ * Send a JSON packet with length prefix and \r\n delimiter
+ * Format: [LENGTH:4bytes in network byte order][JSON string][\r\n]
  */
 int send_json_packet(int socket_fd, const char *json_str)
 {
@@ -92,30 +92,34 @@ int send_json_packet(int socket_fd, const char *json_str)
         return -1;
     }
 
-    // Calculate JSON length
+    // Calculate JSON length (excluding delimiter)
     uint32_t json_length = strlen(json_str);
 
     // Check size limit
-    if (json_length > MAX_PACKET_SIZE - HEADER_SIZE)
+    if (json_length > MAX_PACKET_SIZE - HEADER_SIZE - 2)
     {
         fprintf(stderr, "send_json_packet: JSON too large (%u bytes)\n", json_length);
         return -1;
     }
 
-    // Convert length to network byte order (big-endian)
+    // Build complete packet: [LENGTH][JSON][\r\n] in one buffer
+    char packet[MAX_PACKET_SIZE];
+    
+    // Add length prefix
     uint32_t network_length = htonl(json_length);
+    memcpy(packet, &network_length, HEADER_SIZE);
+    
+    // Add JSON payload
+    memcpy(packet + HEADER_SIZE, json_str, json_length);
+    
+    // Add delimiter
+    packet[HEADER_SIZE + json_length] = '\r';
+    packet[HEADER_SIZE + json_length + 1] = '\n';
 
-    // Send length prefix (4 bytes)
-    if (send_all(socket_fd, &network_length, HEADER_SIZE) < 0)
+    // Send entire packet in one syscall
+    if (send_all(socket_fd, packet, HEADER_SIZE + json_length + 2) < 0)
     {
-        fprintf(stderr, "send_json_packet: failed to send length prefix\n");
-        return -1;
-    }
-
-    // Send JSON payload
-    if (send_all(socket_fd, json_str, json_length) < 0)
-    {
-        fprintf(stderr, "send_json_packet: failed to send JSON payload\n");
+        fprintf(stderr, "send_json_packet: failed to send packet\n");
         return -1;
     }
 
@@ -160,21 +164,21 @@ int receive_json_packet(int socket_fd, char *buffer, size_t buffer_size)
         return -1;
     }
 
-    if (json_length > MAX_PACKET_SIZE - HEADER_SIZE)
+    if (json_length > MAX_PACKET_SIZE - HEADER_SIZE - 2)
     {
         fprintf(stderr, "receive_json_packet: packet too large (%u bytes)\n", json_length);
         return -1;
     }
 
-    if (json_length >= buffer_size)
+    if (json_length + 2 > buffer_size)
     {
         fprintf(stderr, "receive_json_packet: buffer too small (need %u, have %zu)\n", 
-                json_length + 1, buffer_size);
+                json_length + 3, buffer_size);
         return -1;
     }
 
-    // Receive JSON payload
-    result = recv_all(socket_fd, buffer, json_length);
+    // Receive JSON payload + delimiter in one syscall
+    result = recv_all(socket_fd, buffer, json_length + 2);
     
     if (result == -2)
     {
@@ -184,6 +188,14 @@ int receive_json_packet(int socket_fd, char *buffer, size_t buffer_size)
     else if (result < 0)
     {
         fprintf(stderr, "receive_json_packet: failed to receive JSON payload\n");
+        return -1;
+    }
+
+    // Verify delimiter at the end
+    if (buffer[json_length] != '\r' || buffer[json_length + 1] != '\n')
+    {
+        fprintf(stderr, "receive_json_packet: invalid delimiter (expected \\r\\n, got %02x%02x)\n",
+                (unsigned char)buffer[json_length], (unsigned char)buffer[json_length + 1]);
         return -1;
     }
 

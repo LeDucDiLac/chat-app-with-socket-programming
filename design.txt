@@ -4,19 +4,61 @@ Multi clients tech: Threads
 
 Databases: SQLite 3
 
-    - accounts: id - username - password - account_status(active/banned) - user_state(online/offline)
+    - accounts: 
+        id INTEGER PRIMARY KEY AUTOINCREMENT
+        username TEXT UNIQUE NOT NULL
+        password TEXT NOT NULL
+        account_status TEXT DEFAULT 'active' CHECK(account_status IN ('active', 'banned'))
+        user_state TEXT DEFAULT 'offline' CHECK(user_state IN ('online', 'offline', 'away'))
+        created_at INTEGER NOT NULL
     
-    - friend_requests: request_id - sender_id(FK id accounts) - receiver_id(FK id accounts) - status(pending/accepted/rejected) - timestamp
+    - friend_requests: 
+        request_id INTEGER PRIMARY KEY AUTOINCREMENT
+        sender_id INTEGER NOT NULL (FK -> accounts.id)
+        receiver_id INTEGER NOT NULL (FK -> accounts.id)
+        status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'accepted', 'rejected'))
+        timestamp INTEGER NOT NULL
+        UNIQUE(sender_id, receiver_id)
+        CHECK(sender_id != receiver_id)
     
-    - friend_lists: id1(FK id accounts) - id2(FK id accounts) - friendship_date
+    - friendships: 
+        friendship_id INTEGER PRIMARY KEY AUTOINCREMENT
+        user_id1 INTEGER NOT NULL (FK -> accounts.id)
+        user_id2 INTEGER NOT NULL (FK -> accounts.id)
+        created_at INTEGER NOT NULL
+        UNIQUE(user_id1, user_id2)
+        CHECK(user_id1 < user_id2)  -- Ensure only one row per friendship pair
     
-    - groups: group_id - group_name - created_by(FK id accounts) - created_at
+    - groups: 
+        group_id INTEGER PRIMARY KEY AUTOINCREMENT
+        group_name TEXT NOT NULL
+        created_by INTEGER NOT NULL (FK -> accounts.id)
+        created_at INTEGER NOT NULL
     
-    - group_members: group_id(FK group_id groups) - user_id(FK id accounts) - role(admin/member) - joined_at
+    - group_members: 
+        group_id INTEGER NOT NULL (FK -> groups.group_id ON DELETE CASCADE)
+        user_id INTEGER NOT NULL (FK -> accounts.id)
+        role TEXT DEFAULT 'member' CHECK(role IN ('admin', 'member'))
+        joined_at INTEGER NOT NULL
+        PRIMARY KEY(group_id, user_id)
     
-    - messages: message_id - sender_id(FK id accounts) - receiver_id(FK id accounts, NULL if group) - group_id(FK group_id groups, NULL if direct) - content - timestamp - read_status(read/unread) - is_offline(0/1)
+    - messages: 
+        message_id INTEGER PRIMARY KEY AUTOINCREMENT
+        sender_id INTEGER NOT NULL (FK -> accounts.id)
+        receiver_id INTEGER (FK -> accounts.id, NULL if group message)
+        group_id INTEGER (FK -> groups.group_id ON DELETE CASCADE, NULL if direct message)
+        content TEXT NOT NULL
+        timestamp INTEGER NOT NULL
+        is_read INTEGER DEFAULT 0 CHECK(is_read IN (0, 1))
+        is_offline INTEGER DEFAULT 0 CHECK(is_offline IN (0, 1))
+        CHECK((receiver_id IS NULL) != (group_id IS NULL))  -- Either receiver_id OR group_id, not both
     
-    - activity_logs: log_id - user_id(FK id accounts) - action_type - details - timestamp
+    - activity_logs: 
+        log_id INTEGER PRIMARY KEY AUTOINCREMENT
+        user_id INTEGER (FK -> accounts.id, NULL for system logs)
+        action_type TEXT NOT NULL
+        details TEXT
+        timestamp INTEGER NOT NULL
     
 
 Protocol Design:

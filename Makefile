@@ -1,25 +1,27 @@
 CC = gcc
 CXX = g++
-CFLAGS = -Wall -Wextra -I$(UTILS_DIR) -Ilibs
-CXXFLAGS = -Wall -Wextra -std=c++11 -I$(UTILS_DIR) -Ilibs
+CFLAGS = -Wall -Wextra -I$(UTILS_DIR) -I$(LIBS_DIR)
+CXXFLAGS = -Wall -Wextra -std=c++11 -I$(UTILS_DIR) -I$(LIBS_DIR)
 LDFLAGS =
 LDFLAGS_SQLITE = -lsqlite3
 
 # Directories
-SERVER_DIR = src/Server
-CLIENT_DIR = src/Client
-UTILS_DIR = src/Utils
+LIBS_DIR = libs
+SERVER_DIR = src/server
+CLIENT_DIR = src/client
+UTILS_DIR = src/utils
 
 # Source files
-SERVER_SRC = $(SERVER_DIR)/server.c
-CLIENT_SRC = $(CLIENT_DIR)/client.c
-PROTOCOL_SRC = $(UTILS_SRC)/protocol.cpp
+SERVER_SRC = $(SERVER_DIR)/server.cpp
+CLIENT_SRC = $(CLIENT_DIR)/client.cpp
+PROTOCOL_SRC = $(UTILS_DIR)/protocol.cpp
+DB_MANAGER_SRC = $(SERVER_DIR)/db_manager.cpp
 
 TEST_SRC= $(SERVER_DIR)/test.c
 TEST_JSON_SRC= $(SERVER_DIR)/test_json.cpp
 TEST_PROTOCOL_SRC= $(SERVER_DIR)/test_protocol.cpp
 TEST_PIPELINED_SRC= $(SERVER_DIR)/test_pipelined.cpp
-PROTOCOL_SRC= $(UTILS_DIR)/protocol.cpp
+INIT_DB_SRC= $(SERVER_DIR)/init_db.cpp
 
 # Output executables
 SERVER_BIN = server
@@ -29,16 +31,16 @@ CLIENT_BIN = client
 all: server client
 
 # Build server
-server: $(SERVER_SRC) $(UTILS_SRC)
-	$(CC) $(CFLAGS) $(SERVER_SRC) $(PROTOCOL_SRC) -o $(SERVER_BIN) $(LDFLAGS)
+server: $(SERVER_SRC) $(PROTOCOL_SRC) $(DB_MANAGER_SRC)
+	$(CXX) $(CXXFLAGS) -pthread $(SERVER_SRC) $(PROTOCOL_SRC) $(DB_MANAGER_SRC) -o $(SERVER_BIN) $(LDFLAGS_SQLITE)
 
 # Build client
-client: $(CLIENT_SRC) $(UTILS_SRC)
-	$(CC) $(CFLAGS) $(CLIENT_SRC) $(PROTOCOL_SRC) -o $(CLIENT_BIN) $(LDFLAGS)
+client: $(CLIENT_SRC) $(PROTOCOL_SRC)
+	$(CXX) $(CXXFLAGS) -pthread $(CLIENT_SRC) $(PROTOCOL_SRC) -o $(CLIENT_BIN) $(LDFLAGS)
 
 # Clean compiled files
 clean:
-	rm -f $(SERVER_BIN) $(CLIENT_BIN) test test_json test_protocol test_pipelined
+	rm -f $(SERVER_BIN) $(CLIENT_BIN) test test_json test_protocol test_pipelined init_db
 	rm -f $(SERVER_DIR)/*.o $(CLIENT_DIR)/*.o
 
 # Clean and rebuild
@@ -56,6 +58,9 @@ test-protocol: $(TEST_PROTOCOL_SRC) $(PROTOCOL_SRC)
 test-pipelined: $(TEST_PIPELINED_SRC) $(PROTOCOL_SRC)
 	$(CXX) $(CXXFLAGS) -pthread -o test_pipelined $(TEST_PIPELINED_SRC) $(PROTOCOL_SRC)
 
+init-db: $(INIT_DB_SRC)
+	$(CXX) $(CXXFLAGS) -o init_db $(INIT_DB_SRC) $(LDFLAGS_SQLITE)
+
 # Run server (example)
 run-server: server
 	./$(SERVER_BIN) 5550 storage
@@ -64,4 +69,4 @@ run-server: server
 run-client: client
 	./$(CLIENT_BIN) 127.0.0.1 5550
 
-.PHONY: all server client clean rebuild run-server run-client test test-json test-protocol test-pipelined
+.PHONY: all server client clean rebuild run-server run-client test test-json test-protocol test-pipelined init-db

@@ -7,12 +7,13 @@
 // Protocol constants
 #define MAX_PACKET_SIZE 65536 // 64KB max packet size
 #define HEADER_SIZE 4         // 4 bytes for length prefix
+#define DELIMITER "\r\n"      // Message delimiter
 
 // Function prototypes for sending/receiving JSON packets
 
 /**
- * Send a JSON string through socket with length prefix
- * Packet format: [LENGTH:4bytes][JSON_PAYLOAD:variable]
+ * Send a JSON string through socket with length prefix and \r\n delimiter
+ * Packet format: [LENGTH:4bytes][JSON_PAYLOAD:variable][\r\n]
  *
  * @param socket_fd Socket file descriptor
  * @param json_str JSON string to send (null-terminated)
