@@ -9,7 +9,7 @@
 #include <unistd.h>
 #include <stdint.h>
 #include <sys/stat.h>
-#include "../TCP_Server/tcp_utils.h"
+#include "tcp_utils.h"
 
 #define BUFF_SIZE (1 << 14)
 

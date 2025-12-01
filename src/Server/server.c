@@ -14,6 +14,7 @@
 #include <sys/wait.h>
 
 #include "tcp_utils.h"
+#include "protocol.h"
 
 #define ACCOUNT_FILE_PATH "account.txt"
 #define BACKLOG 10

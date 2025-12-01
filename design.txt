@@ -22,11 +22,16 @@ Databases: SQLite 3
 Protocol Design:
 ================
 
-Packet Format (Fixed Header + Variable Payload):
-    [TYPE:2bytes][LENGTH:4bytes][PAYLOAD:variable]
-    - TYPE: Command code (uint16_t)
-    - LENGTH: Payload length in bytes (uint32_t)
-    - PAYLOAD: Data (format depends on TYPE)
+Packet Format (Length-Prefixed JSON):
+    [LENGTH:4bytes][JSON_PAYLOAD:variable]
+    - LENGTH: JSON payload length in bytes (uint32_t, network byte order)
+    - JSON_PAYLOAD: UTF-8 encoded JSON string
+
+All messages follow this JSON structure:
+    {
+        "type": <command_type>,
+        "data": { ... command-specific fields ... }
+    }
 
 Status Codes (Server Response):
     200 - SUCCESS
@@ -64,72 +69,371 @@ Command Types (Server -> Client):
     2005 - OFFLINE_MESSAGES_DATA
     2006 - USER_STATUS_UPDATE (friend went online/offline)
 
-Payload Formats:
-----------------
+JSON Payload Formats:
+---------------------
 
 REGISTER (1000):
-    Request:  username|password
-    Response: [200|user_id] or [409|Username already exists]
+    Request:  
+    {
+        "type": 1000,
+        "data": {
+            "username": "alice",
+            "password": "password123"
+        }
+    }
+    
+    Response (Success):
+    {
+        "type": 2000,
+        "data": {
+            "status": 200,
+            "message": "Registration successful",
+            "user_id": 1
+        }
+    }
+    
+    Response (Error):
+    {
+        "type": 2000,
+        "data": {
+            "status": 409,
+            "message": "Username already exists"
+        }
+    }
 
 LOGIN (1001):
-    Request:  username|password
-    Response: [200|user_id|username] or [401|Invalid credentials] or [403|Account banned]
+    Request:
+    {
+        "type": 1001,
+        "data": {
+            "username": "alice",
+            "password": "password123"
+        }
+    }
+    
+    Response (Success):
+    {
+        "type": 2000,
+        "data": {
+            "status": 200,
+            "message": "Login successful",
+            "user_id": 1,
+            "username": "alice"
+        }
+    }
+    
+    Response (Error):
+    {
+        "type": 2000,
+        "data": {
+            "status": 401,
+            "message": "Invalid credentials"
+        }
+    }
 
 LOGOUT (1002):
-    Request:  (empty)
-    Response: [200|Logged out successfully]
+    Request:
+    {
+        "type": 1002,
+        "data": {}
+    }
+    
+    Response:
+    {
+        "type": 2000,
+        "data": {
+            "status": 200,
+            "message": "Logged out successfully"
+        }
+    }
 
 SEND_MESSAGE (1003):
-    Request:  receiver_id|message_content
-    Response: [200|Message sent] or [404|User not found]
-    Server->Receiver: [2001|sender_id|sender_username|message_content|timestamp]
+    Request:
+    {
+        "type": 1003,
+        "data": {
+            "receiver_id": 2,
+            "content": "Hey Bob, how are you?"
+        }
+    }
+    
+    Response:
+    {
+        "type": 2000,
+        "data": {
+            "status": 200,
+            "message": "Message sent"
+        }
+    }
+    
+    Server->Receiver (Push):
+    {
+        "type": 2001,
+        "data": {
+            "sender_id": 1,
+            "sender_username": "alice",
+            "content": "Hey Bob, how are you?",
+            "timestamp": 1732300000
+        }
+    }
 
 SEND_GROUP_MESSAGE (1004):
-    Request:  group_id|message_content
-    Response: [200|Message sent] or [404|Group not found] or [403|Not a member]
-    Server->Members: [2002|group_id|group_name|sender_id|sender_username|message_content|timestamp]
+    Request:
+    {
+        "type": 1004,
+        "data": {
+            "group_id": 1,
+            "content": "Hello everyone!"
+        }
+    }
+    
+    Response:
+    {
+        "type": 2000,
+        "data": {
+            "status": 200,
+            "message": "Message sent"
+        }
+    }
+    
+    Server->Group Members (Push):
+    {
+        "type": 2002,
+        "data": {
+            "group_id": 1,
+            "group_name": "Study Group",
+            "sender_id": 1,
+            "sender_username": "alice",
+            "content": "Hello everyone!",
+            "timestamp": 1732300000
+        }
+    }
 
 SEND_FRIEND_REQUEST (1005):
-    Request:  target_username
-    Response: [200|Request sent] or [404|User not found] or [409|Already friends/pending]
-    Server->Target: [2003|sender_id|sender_username|timestamp]
+    Request:
+    {
+        "type": 1005,
+        "data": {
+            "target_username": "bob"
+        }
+    }
+    
+    Response:
+    {
+        "type": 2000,
+        "data": {
+            "status": 200,
+            "message": "Friend request sent"
+        }
+    }
+    
+    Server->Target (Push):
+    {
+        "type": 2003,
+        "data": {
+            "request_id": 1,
+            "sender_id": 1,
+            "sender_username": "alice",
+            "timestamp": 1732300000
+        }
+    }
 
 ACCEPT_FRIEND_REQUEST (1006):
-    Request:  request_id
-    Response: [200|Friend added] or [404|Request not found]
+    Request:
+    {
+        "type": 1006,
+        "data": {
+            "request_id": 1
+        }
+    }
+    
+    Response:
+    {
+        "type": 2000,
+        "data": {
+            "status": 200,
+            "message": "Friend added"
+        }
+    }
 
 REJECT_FRIEND_REQUEST (1007):
-    Request:  request_id
-    Response: [200|Request rejected] or [404|Request not found]
+    Request:
+    {
+        "type": 1007,
+        "data": {
+            "request_id": 1
+        }
+    }
+    
+    Response:
+    {
+        "type": 2000,
+        "data": {
+            "status": 200,
+            "message": "Friend request rejected"
+        }
+    }
 
 UNFRIEND (1008):
-    Request:  friend_id
-    Response: [200|Unfriended] or [404|Not friends]
+    Request:
+    {
+        "type": 1008,
+        "data": {
+            "friend_id": 2
+        }
+    }
+    
+    Response:
+    {
+        "type": 2000,
+        "data": {
+            "status": 200,
+            "message": "Unfriended successfully"
+        }
+    }
 
 GET_FRIEND_LIST (1009):
-    Request:  (empty)
-    Response: [2004|count|friend1_id|friend1_username|friend1_status|friend2_id|friend2_username|friend2_status|...]
+    Request:
+    {
+        "type": 1009,
+        "data": {}
+    }
+    
+    Response:
+    {
+        "type": 2004,
+        "data": {
+            "status": 200,
+            "friends": [
+                {
+                    "id": 2,
+                    "username": "bob",
+                    "user_state": "online"
+                },
+                {
+                    "id": 3,
+                    "username": "charlie",
+                    "user_state": "offline"
+                }
+            ]
+        }
+    }
 
 CREATE_GROUP (1010):
-    Request:  group_name
-    Response: [201|group_id|group_name] or [400|Invalid name]
+    Request:
+    {
+        "type": 1010,
+        "data": {
+            "group_name": "Study Group"
+        }
+    }
+    
+    Response:
+    {
+        "type": 2000,
+        "data": {
+            "status": 201,
+            "message": "Group created",
+            "group_id": 1,
+            "group_name": "Study Group"
+        }
+    }
 
 ADD_TO_GROUP (1011):
-    Request:  group_id|user_id
-    Response: [200|User added] or [403|Not admin] or [404|Group/User not found]
+    Request:
+    {
+        "type": 1011,
+        "data": {
+            "group_id": 1,
+            "user_id": 2
+        }
+    }
+    
+    Response:
+    {
+        "type": 2000,
+        "data": {
+            "status": 200,
+            "message": "User added to group"
+        }
+    }
 
 REMOVE_FROM_GROUP (1012):
-    Request:  group_id|user_id
-    Response: [200|User removed] or [403|Not admin] or [404|Group/User not found]
+    Request:
+    {
+        "type": 1012,
+        "data": {
+            "group_id": 1,
+            "user_id": 2
+        }
+    }
+    
+    Response:
+    {
+        "type": 2000,
+        "data": {
+            "status": 200,
+            "message": "User removed from group"
+        }
+    }
 
 LEAVE_GROUP (1013):
-    Request:  group_id
-    Response: [200|Left group] or [404|Group not found]
+    Request:
+    {
+        "type": 1013,
+        "data": {
+            "group_id": 1
+        }
+    }
+    
+    Response:
+    {
+        "type": 2000,
+        "data": {
+            "status": 200,
+            "message": "Left group successfully"
+        }
+    }
 
 GET_OFFLINE_MESSAGES (1014):
-    Request:  (empty)
-    Response: [2005|count|msg1_sender_id|msg1_sender_name|msg1_content|msg1_timestamp|msg2_...|...]
+    Request:
+    {
+        "type": 1014,
+        "data": {}
+    }
+    
+    Response:
+    {
+        "type": 2005,
+        "data": {
+            "status": 200,
+            "messages": [
+                {
+                    "message_id": 3,
+                    "sender_id": 3,
+                    "sender_username": "charlie",
+                    "content": "Hi Alice!",
+                    "timestamp": 1732300200
+                },
+                {
+                    "message_id": 6,
+                    "sender_id": 4,
+                    "sender_username": "diana",
+                    "content": "Can we talk later?",
+                    "timestamp": 1732300500
+                }
+            ]
+        }
+    }
 
 USER_STATUS_UPDATE (2006):
-    Server->Client: [user_id|username|new_status(online/offline)]
+    Server->Client (Push):
+    {
+        "type": 2006,
+        "data": {
+            "user_id": 2,
+            "username": "bob",
+            "user_state": "online"
+        }
+    }
 
