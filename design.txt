@@ -1,0 +1,481 @@
+Protocol used: TCP
+
+Multi clients tech: Threads
+
+Databases: SQLite 3
+
+    - accounts: 
+        id INTEGER PRIMARY KEY AUTOINCREMENT
+        username TEXT UNIQUE NOT NULL
+        password TEXT NOT NULL
+        account_status TEXT DEFAULT 'active' CHECK(account_status IN ('active', 'banned'))
+        user_state TEXT DEFAULT 'offline' CHECK(user_state IN ('online', 'offline', 'away'))
+        created_at INTEGER NOT NULL
+    
+    - friend_requests: 
+        request_id INTEGER PRIMARY KEY AUTOINCREMENT
+        sender_id INTEGER NOT NULL (FK -> accounts.id)
+        receiver_id INTEGER NOT NULL (FK -> accounts.id)
+        status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'accepted', 'rejected'))
+        timestamp INTEGER NOT NULL
+        UNIQUE(sender_id, receiver_id)
+        CHECK(sender_id != receiver_id)
+    
+    - friendships: 
+        friendship_id INTEGER PRIMARY KEY AUTOINCREMENT
+        user_id1 INTEGER NOT NULL (FK -> accounts.id)
+        user_id2 INTEGER NOT NULL (FK -> accounts.id)
+        created_at INTEGER NOT NULL
+        UNIQUE(user_id1, user_id2)
+        CHECK(user_id1 < user_id2)  -- Ensure only one row per friendship pair
+    
+    - groups: 
+        group_id INTEGER PRIMARY KEY AUTOINCREMENT
+        group_name TEXT NOT NULL
+        created_by INTEGER NOT NULL (FK -> accounts.id)
+        created_at INTEGER NOT NULL
+    
+    - group_members: 
+        group_id INTEGER NOT NULL (FK -> groups.group_id ON DELETE CASCADE)
+        user_id INTEGER NOT NULL (FK -> accounts.id)
+        role TEXT DEFAULT 'member' CHECK(role IN ('admin', 'member'))
+        joined_at INTEGER NOT NULL
+        PRIMARY KEY(group_id, user_id)
+    
+    - messages: 
+        message_id INTEGER PRIMARY KEY AUTOINCREMENT
+        sender_id INTEGER NOT NULL (FK -> accounts.id)
+        receiver_id INTEGER (FK -> accounts.id, NULL if group message)
+        group_id INTEGER (FK -> groups.group_id ON DELETE CASCADE, NULL if direct message)
+        content TEXT NOT NULL
+        timestamp INTEGER NOT NULL
+        is_read INTEGER DEFAULT 0 CHECK(is_read IN (0, 1))
+        is_offline INTEGER DEFAULT 0 CHECK(is_offline IN (0, 1))
+        CHECK((receiver_id IS NULL) != (group_id IS NULL))  -- Either receiver_id OR group_id, not both
+    
+    - activity_logs: 
+        log_id INTEGER PRIMARY KEY AUTOINCREMENT
+        user_id INTEGER (FK -> accounts.id, NULL for system logs)
+        action_type TEXT NOT NULL
+        details TEXT
+        timestamp INTEGER NOT NULL
+    
+
+Protocol Design:
+================
+
+Packet Format (Length-Prefixed JSON):
+    [LENGTH:4bytes][JSON_PAYLOAD:variable]
+    - LENGTH: JSON payload length in bytes (uint32_t, network byte order)
+    - JSON_PAYLOAD: UTF-8 encoded JSON string
+
+All messages follow this JSON structure:
+    {
+        "type": <command_type>,
+        "data": { ... command-specific fields ... }
+    }
+
+Status Codes (Server Response):
+    200 - SUCCESS
+    201 - CREATED (new resource created)
+    400 - BAD_REQUEST (invalid format/data)
+    401 - UNAUTHORIZED (authentication failed)
+    403 - FORBIDDEN (banned or insufficient permissions)
+    404 - NOT_FOUND (user/group/message not found)
+    409 - CONFLICT (username exists, already friends, etc.)
+    500 - SERVER_ERROR
+
+Command Types (Client -> Server):
+    1000 - REGISTER
+    1001 - LOGIN
+    1002 - LOGOUT
+    1003 - SEND_MESSAGE
+    1004 - SEND_GROUP_MESSAGE
+    1005 - SEND_FRIEND_REQUEST
+    1006 - ACCEPT_FRIEND_REQUEST
+    1007 - REJECT_FRIEND_REQUEST
+    1008 - UNFRIEND
+    1009 - GET_FRIEND_LIST
+    1010 - CREATE_GROUP
+    1011 - ADD_TO_GROUP
+    1012 - REMOVE_FROM_GROUP
+    1013 - LEAVE_GROUP
+    1014 - GET_OFFLINE_MESSAGES
+
+Command Types (Server -> Client):
+    2000 - RESPONSE (general status response)
+    2001 - MESSAGE_RECEIVED (incoming message)
+    2002 - GROUP_MESSAGE_RECEIVED
+    2003 - FRIEND_REQUEST_RECEIVED
+    2004 - FRIEND_LIST_DATA
+    2005 - OFFLINE_MESSAGES_DATA
+    2006 - USER_STATUS_UPDATE (friend went online/offline)
+
+JSON Payload Formats:
+---------------------
+
+REGISTER (1000):
+    Request:  
+    {
+        "type": 1000,
+        "data": {
+            "username": "alice",
+            "password": "password123"
+        }
+    }
+    
+    Response (Success):
+    {
+        "type": 2000,
+        "data": {
+            "status": 200,
+            "message": "Registration successful",
+            "user_id": 1
+        }
+    }
+    
+    Response (Error):
+    {
+        "type": 2000,
+        "data": {
+            "status": 409,
+            "message": "Username already exists"
+        }
+    }
+
+LOGIN (1001):
+    Request:
+    {
+        "type": 1001,
+        "data": {
+            "username": "alice",
+            "password": "password123"
+        }
+    }
+    
+    Response (Success):
+    {
+        "type": 2000,
+        "data": {
+            "status": 200,
+            "message": "Login successful",
+            "user_id": 1,
+            "username": "alice"
+        }
+    }
+    
+    Response (Error):
+    {
+        "type": 2000,
+        "data": {
+            "status": 401,
+            "message": "Invalid credentials"
+        }
+    }
+
+LOGOUT (1002):
+    Request:
+    {
+        "type": 1002,
+        "data": {}
+    }
+    
+    Response:
+    {
+        "type": 2000,
+        "data": {
+            "status": 200,
+            "message": "Logged out successfully"
+        }
+    }
+
+SEND_MESSAGE (1003):
+    Request:
+    {
+        "type": 1003,
+        "data": {
+            "receiver_id": 2,
+            "content": "Hey Bob, how are you?"
+        }
+    }
+    
+    Response:
+    {
+        "type": 2000,
+        "data": {
+            "status": 200,
+            "message": "Message sent"
+        }
+    }
+    
+    Server->Receiver (Push):
+    {
+        "type": 2001,
+        "data": {
+            "sender_id": 1,
+            "sender_username": "alice",
+            "content": "Hey Bob, how are you?",
+            "timestamp": 1732300000
+        }
+    }
+
+SEND_GROUP_MESSAGE (1004):
+    Request:
+    {
+        "type": 1004,
+        "data": {
+            "group_id": 1,
+            "content": "Hello everyone!"
+        }
+    }
+    
+    Response:
+    {
+        "type": 2000,
+        "data": {
+            "status": 200,
+            "message": "Message sent"
+        }
+    }
+    
+    Server->Group Members (Push):
+    {
+        "type": 2002,
+        "data": {
+            "group_id": 1,
+            "group_name": "Study Group",
+            "sender_id": 1,
+            "sender_username": "alice",
+            "content": "Hello everyone!",
+            "timestamp": 1732300000
+        }
+    }
+
+SEND_FRIEND_REQUEST (1005):
+    Request:
+    {
+        "type": 1005,
+        "data": {
+            "target_username": "bob"
+        }
+    }
+    
+    Response:
+    {
+        "type": 2000,
+        "data": {
+            "status": 200,
+            "message": "Friend request sent"
+        }
+    }
+    
+    Server->Target (Push):
+    {
+        "type": 2003,
+        "data": {
+            "request_id": 1,
+            "sender_id": 1,
+            "sender_username": "alice",
+            "timestamp": 1732300000
+        }
+    }
+
+ACCEPT_FRIEND_REQUEST (1006):
+    Request:
+    {
+        "type": 1006,
+        "data": {
+            "target_username": abc
+        }
+    }
+    
+    Response:
+    {
+        "type": 2000,
+        "data": {
+            "status": 200,
+            "message": "Friend added"
+        }
+    }
+
+REJECT_FRIEND_REQUEST (1007):
+    Request:
+    {
+        "type": 1007,
+        "data": {
+            "request_id": 1
+        }
+    }
+    
+    Response:
+    {
+        "type": 2000,
+        "data": {
+            "status": 200,
+            "message": "Friend request rejected"
+        }
+    }
+
+UNFRIEND (1008):
+    Request:
+    {
+        "type": 1008,
+        "data": {
+            "friend_id": 2
+        }
+    }
+    
+    Response:
+    {
+        "type": 2000,
+        "data": {
+            "status": 200,
+            "message": "Unfriended successfully"
+        }
+    }
+
+GET_FRIEND_LIST (1009):
+    Request:
+    {
+        "type": 1009,
+        "data": {}
+    }
+    
+    Response:
+    {
+        "type": 2004,
+        "data": {
+            "status": 200,
+            "friends": [
+                {
+                    "id": 2,
+                    "username": "bob",
+                    "user_state": "online"
+                },
+                {
+                    "id": 3,
+                    "username": "charlie",
+                    "user_state": "offline"
+                }
+            ]
+        }
+    }
+
+CREATE_GROUP (1010):
+    Request:
+    {
+        "type": 1010,
+        "data": {
+            "group_name": "Study Group"
+        }
+    }
+    
+    Response:
+    {
+        "type": 2000,
+        "data": {
+            "status": 201,
+            "message": "Group created",
+            "group_id": 1,
+            "group_name": "Study Group"
+        }
+    }
+
+ADD_TO_GROUP (1011):
+    Request:
+    {
+        "type": 1011,
+        "data": {
+            "group_id": 1,
+            "user_id": 2
+        }
+    }
+    
+    Response:
+    {
+        "type": 2000,
+        "data": {
+            "status": 200,
+            "message": "User added to group"
+        }
+    }
+
+REMOVE_FROM_GROUP (1012):
+    Request:
+    {
+        "type": 1012,
+        "data": {
+            "group_id": 1,
+            "user_id": 2
+        }
+    }
+    
+    Response:
+    {
+        "type": 2000,
+        "data": {
+            "status": 200,
+            "message": "User removed from group"
+        }
+    }
+
+LEAVE_GROUP (1013):
+    Request:
+    {
+        "type": 1013,
+        "data": {
+            "group_id": 1
+        }
+    }
+    
+    Response:
+    {
+        "type": 2000,
+        "data": {
+            "status": 200,
+            "message": "Left group successfully"
+        }
+    }
+
+GET_OFFLINE_MESSAGES (1014):
+    Request:
+    {
+        "type": 1014,
+        "data": {}
+    }
+    
+    Response:
+    {
+        "type": 2005,
+        "data": {
+            "status": 200,
+            "messages": [
+                {
+                    "message_id": 3,
+                    "sender_id": 3,
+                    "sender_username": "charlie",
+                    "content": "Hi Alice!",
+                    "timestamp": 1732300200
+                },
+                {
+                    "message_id": 6,
+                    "sender_id": 4,
+                    "sender_username": "diana",
+                    "content": "Can we talk later?",
+                    "timestamp": 1732300500
+                }
+            ]
+        }
+    }
+
+USER_STATUS_UPDATE (2006):
+    Server->Client (Push):
+    {
+        "type": 2006,
+        "data": {
+            "user_id": 2,
+            "username": "bob",
+            "user_state": "online"
+        }
+    }
+

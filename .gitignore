@@ -1,0 +1,11 @@
+# Executables
+/server
+/client
+init_db
+reset_db
+test_*
+.vscode
+
+# Build artifacts
+*.o
+*.a
