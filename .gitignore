@@ -2,7 +2,7 @@
 /server
 /client
 init_db
-reset_db
+reset-db
 test_*
 .vscode
 

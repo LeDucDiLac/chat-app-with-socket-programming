@@ -13,6 +13,7 @@
 #include "../../libs/json.hpp"
 
 #include "friend_service.h"
+#include "group_service.h"
 
 using json = nlohmann::json;
 
@@ -105,34 +106,34 @@ void process_client_request(int client_sock, const json& request)
             case 1004: // SEND_GROUP_MESSAGE
                 handle_send_group_message(client_sock, request);
                 break;
-            case 3000: // SEND_FRIEND_REQUEST
+            case 1300: // SEND_FRIEND_REQUEST
                 handle_get_friend_request(client_sock, request);
                 break;
-            case 3001: // SEND_FRIEND_REQUEST
+            case 1301: // SEND_FRIEND_REQUEST
                 handle_send_friend_request(client_sock, request);
                 break;
-            case 3002: // ACCEPT_FRIEND_REQUEST
+            case 1302: // ACCEPT_FRIEND_REQUEST
                 handle_accept_friend_request(client_sock, request);
                 break;
-            case 3003: // REJECT_FRIEND_REQUEST
+            case 1303: // REJECT_FRIEND_REQUEST
                 handle_reject_friend_request(client_sock, request);
                 break;
-            case 3004: // UNFRIEND
+            case 1304: // UNFRIEND
                 handle_unfriend(client_sock, request);
                 break;
-            case 3005: // GET_FRIEND_LIST
+            case 1305: // GET_FRIEND_LIST
                 handle_get_friend_list(client_sock, request);
                 break;
-            case 1010: // CREATE_GROUP
+            case 1400: // CREATE_GROUP
                 handle_create_group(client_sock, request);
                 break;
-            case 1011: // ADD_TO_GROUP
+            case 1401: // ADD_TO_GROUP
                 handle_add_to_group(client_sock, request);
                 break;
-            case 1012: // REMOVE_FROM_GROUP
+            case 1402: // REMOVE_FROM_GROUP
                 handle_remove_from_group(client_sock, request);
                 break;
-            case 1013: // LEAVE_GROUP
+            case 1403: // LEAVE_GROUP
                 handle_leave_group(client_sock, request);
                 break;
             case 1014: // GET_OFFLINE_MESSAGES
@@ -782,30 +783,230 @@ void handle_get_friend_list(int client_sock, const json& request)
 
 void handle_create_group(int client_sock, const json& request)
 {
-    // TODO: Implement create group
-    std::cout << "[PLACEHOLDER] CREATE_GROUP called" << std::endl;
-    send_response(client_sock, 200, "Create group feature not implemented yet");
+    // 1. Lấy session người tạo
+    Session* session = find_session_by_socket(client_sock);
+    if (!session)
+    {
+        send_response(client_sock, 401, "You are not authenticated");
+        return;
+    }
+
+    int creator_id = session->user_id;
+
+    // 2. Lấy tên nhóm từ JSON
+    if (!request.contains("data") || 
+        !request["data"].contains("group_name"))
+    {
+        send_response(client_sock, 400, "Invalid request format: Missing group_name");
+        return;
+    }
+
+    std::string group_name = request["data"]["group_name"];
+
+    std::cout << "[CREATE_GROUP] Request from user ID " << creator_id << " for group: " << group_name << std::endl;
+
+    if (createGroup(group_name, creator_id))
+    {
+        send_response(client_sock, 200, "Group created successfully");
+        std::cerr << "[CREATE_GROUP] Success" << std::endl;
+    }
+    else
+    {
+        send_response(client_sock, 500, "Failed to create group (database error)");
+        std::cerr << "[CREATE_GROUP] Failure: Database operation failed" << std::endl;
+    }
 }
 
 void handle_add_to_group(int client_sock, const json& request)
 {
-    // TODO: Implement add to group
-    std::cout << "[PLACEHOLDER] ADD_TO_GROUP called" << std::endl;
-    send_response(client_sock, 200, "Add to group feature not implemented yet");
+    // 1. Lấy session người yêu cầu (phải là owner/admin)
+    Session* session = find_session_by_socket(client_sock);
+    if (!session)
+    {
+        send_response(client_sock, 401, "You are not authenticated");
+        return;
+    }
+
+    int requester_id = session->user_id; // Người thực hiện hành động thêm
+
+    // 2. Kiểm tra và lấy tham số từ JSON
+    if (!request.contains("data") ||
+        !request["data"].contains("group_name") ||
+        !request["data"].contains("target_username")) // Đổi từ "username" thành "target_username" để rõ ràng hơn
+    {
+        send_response(client_sock, 400, "Invalid request format: Missing group_name or target_username");
+        return;
+    }
+
+    std::string group_name = request["data"]["group_name"];
+    std::string target_username = request["data"]["target_username"];
+
+    // 3. Lấy Group ID
+    int group_id = getGroupIdByName(group_name);
+    if (group_id == -1)
+    {
+        send_response(client_sock, 404, "Group not found");
+        return;
+    }
+
+    // 4. Lấy Target User ID
+    int target_user_id = getUserIdByUsername(target_username); 
+    if (target_user_id == -1)
+    {
+        send_response(client_sock, 404, "Target user not found");
+        return;
+    }
+
+    // 5. Kiểm tra quyền (Chỉ Owner mới được thêm thành viên - Có thể mở rộng là Admin)
+    if (!isGroupOwner(group_id, requester_id))
+    {
+        send_response(client_sock, 403, "Permission denied: Only the group owner can add members");
+        return;
+    }
+
+    // 6. Thêm thành viên vào nhóm
+    if (addGroupMember(group_id, target_user_id)) 
+    {
+        send_response(client_sock, 200, "User added to group successfully");
+    }
+    else
+    {
+        send_response(client_sock, 500, "Failed to add user to group (database error)");
+    }
 }
 
 void handle_remove_from_group(int client_sock, const json& request)
 {
-    // TODO: Implement remove from group
-    std::cout << "[PLACEHOLDER] REMOVE_FROM_GROUP called" << std::endl;
-    send_response(client_sock, 200, "Remove from group feature not implemented yet");
+    // 1. Lấy session người yêu cầu (requester)
+    Session* session = find_session_by_socket(client_sock);
+    if (!session)
+    {
+        send_response(client_sock, 401, "You are not authenticated");
+        return;
+    }
+    int requester_id = session->user_id;
+
+    // 2. Kiểm tra và lấy tham số từ JSON
+    if (!request.contains("data") || 
+        !request["data"].contains("group_name") || 
+        !request["data"].contains("target_username"))
+    {
+        send_response(client_sock, 400, "Invalid request format: Missing group_name or target_username");
+        return;
+    }
+
+    std::string group_name = request["data"]["group_name"];
+    std::string target_username = request["data"]["target_username"];
+
+    // 3. Lấy Group ID và Target User ID
+    int group_id = getGroupIdByName(group_name);
+    if (group_id == -1)
+    {
+        send_response(client_sock, 404, "Group not found");
+        return;
+    }
+
+    int target_user_id = getUserIdByUsername(target_username);
+    if (target_user_id == -1)
+    {
+        send_response(client_sock, 404, "Target user not found");
+        return;
+    }
+    
+    // Kiểm tra xem người dùng có đang cố tự xóa mình không
+    if (requester_id == target_user_id) {
+        send_response(client_sock, 400, "You cannot remove yourself. Please use the LEAVE_GROUP command.");
+        return;
+    }
+
+    // 4. Kiểm tra quyền của người yêu cầu
+    if (!isGroupOwner(group_id, requester_id))
+    {
+        send_response(client_sock, 403, "Permission denied: Only group admin or owner can remove members");
+        return;
+    }
+    
+    // 5. Kiểm tra Target User có phải là thành viên nhóm không
+    if (!isGroupMember(group_id, target_user_id))
+    {
+        send_response(client_sock, 404, "Target user is not a member of this group");
+        return;
+    }
+    
+    // 7. Thực hiện xóa thành viên
+    if (removeGroupMember(group_id, target_user_id))
+    {
+        send_response(client_sock, 200, "User removed from group successfully");
+    }
+    else
+    {
+        send_response(client_sock, 500, "Failed to remove user from group (database error)");
+    }
 }
 
 void handle_leave_group(int client_sock, const json& request)
 {
-    // TODO: Implement leave group
-    std::cout << "[PLACEHOLDER] LEAVE_GROUP called" << std::endl;
-    send_response(client_sock, 200, "Leave group feature not implemented yet");
+    // 1. Lấy session người yêu cầu (requester)
+    Session* session = find_session_by_socket(client_sock);
+    if (!session)
+    {
+        send_response(client_sock, 401, "You are not authenticated");
+        return;
+    }
+    int user_id = session->user_id;
+
+    // 2. Kiểm tra và lấy tên nhóm từ JSON
+    if (!request.contains("data") || 
+        !request["data"].contains("group_name"))
+    {
+        send_response(client_sock, 400, "Invalid request format: Missing group_name");
+        return;
+    }
+
+    std::string group_name = request["data"]["group_name"];
+
+    // 3. Lấy Group ID
+    int group_id = getGroupIdByName(group_name);
+    if (group_id == -1)
+    {
+        send_response(client_sock, 404, "Group not found");
+        return;
+    }
+    
+    // 4. Kiểm tra xem người dùng có phải là thành viên không
+    if (!isGroupMember(group_id, user_id))
+    {
+        send_response(client_sock, 404, "You are not a member of this group");
+        return;
+    }
+
+    // 5. Kiểm tra quyền sở hữu
+    if (isGroupOwner(group_id, user_id))
+    {
+        // 5a. Nếu là OWNER, xóa toàn bộ nhóm
+        if (deleteGroup(group_id))
+        {
+            send_response(client_sock, 200, "You left the group and the group was dissolved (Owner left)");
+            // TODO: Thông báo cho tất cả thành viên khác rằng nhóm đã bị xóa.
+        }
+        else
+        {
+            send_response(client_sock, 500, "Failed to dissolve the group");
+        }
+    }
+    else
+    {
+        // 5b. Nếu không phải là OWNER, chỉ xóa thành viên
+        if (removeGroupMember(group_id, user_id))
+        {
+            send_response(client_sock, 200, "You left the group successfully");
+            // TODO: Thông báo cho admin/các thành viên khác rằng thành viên này đã rời nhóm.
+        }
+        else
+        {
+            send_response(client_sock, 500, "Failed to leave the group");
+        }
+    }
 }
 
 void handle_get_offline_messages(int client_sock, const json& request)

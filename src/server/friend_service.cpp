@@ -4,10 +4,10 @@
 
 std::vector<FriendRequestInfo> getAllFriendRequests(const int receiver_id)
 {
-    std::vector<FriendRequestInfo> requests;
-    sqlite3_stmt *stmt;
+  std::vector<FriendRequestInfo> requests;
+  sqlite3_stmt *stmt;
 
-    const char *sql = R"(
+  const char *sql = R"(
         SELECT 
             u.id,
             u.username,
@@ -18,39 +18,38 @@ std::vector<FriendRequestInfo> getAllFriendRequests(const int receiver_id)
         ORDER BY fr.timestamp DESC
     )";
 
-    if (sqlite3_prepare_v2(g_db, sql, -1, &stmt, nullptr) != SQLITE_OK)
-    {
-        std::cerr << "❌ Prepare failed (getAllFriendRequests): "
-                  << sqlite3_errmsg(g_db) << std::endl;
-        return requests;
-    }
-
-    sqlite3_bind_int(stmt, 1, receiver_id);
-
-    while (sqlite3_step(stmt) == SQLITE_ROW)
-    {
-        FriendRequestInfo fr;
-
-        fr.sender_id = sqlite3_column_int(stmt, 0);
-        fr.sender_username = reinterpret_cast<const char*>(
-            sqlite3_column_text(stmt, 1)
-        );
-
-        const unsigned char *ts = sqlite3_column_text(stmt, 2);
-        fr.timestamp = ts ? reinterpret_cast<const char *>(ts) : "";
-
-        requests.push_back(fr);
-    }
-
-    sqlite3_finalize(stmt);
+  if (sqlite3_prepare_v2(g_db, sql, -1, &stmt, nullptr) != SQLITE_OK)
+  {
+    std::cerr << "❌ Prepare failed (getAllFriendRequests): "
+              << sqlite3_errmsg(g_db) << std::endl;
     return requests;
+  }
+
+  sqlite3_bind_int(stmt, 1, receiver_id);
+
+  while (sqlite3_step(stmt) == SQLITE_ROW)
+  {
+    FriendRequestInfo fr;
+
+    fr.sender_id = sqlite3_column_int(stmt, 0);
+    fr.sender_username = reinterpret_cast<const char *>(
+        sqlite3_column_text(stmt, 1));
+
+    const unsigned char *ts = sqlite3_column_text(stmt, 2);
+    fr.timestamp = ts ? reinterpret_cast<const char *>(ts) : "";
+
+    requests.push_back(fr);
+  }
+
+  sqlite3_finalize(stmt);
+  return requests;
 }
 
 bool friendRequestExists(const int sender, const int receiver)
 {
   const char *sql =
       "SELECT 1 FROM friend_requests "
-      "WHERE sender_id = ? AND receiver_id = ? AND status = 'pending' "
+      "WHERE sender_id = ? AND receiver_id = ?"
       "LIMIT 1;";
 
   sqlite3_stmt *stmt;
@@ -82,8 +81,8 @@ bool friendRequestExists(const int sender, const int receiver)
 bool addFriendRequest(const int sender, const int receiver)
 {
   const char *sql =
-      "INSERT INTO friend_requests (sender_id, receiver_id, status, timestamp) "
-      "VALUES (?, ?, 'pending', CURRENT_TIMESTAMP);";
+      "INSERT INTO friend_requests (sender_id, receiver_id) "
+      "VALUES (?, ?);";
 
   sqlite3_stmt *stmt;
 
@@ -278,10 +277,10 @@ bool removeFriendship(const int user1, const int user2)
 
 std::vector<FriendInfo> getAllFriend(const int user_id)
 {
-    std::vector<FriendInfo> friends;
-    sqlite3_stmt *stmt;
+  std::vector<FriendInfo> friends;
+  sqlite3_stmt *stmt;
 
-    const char *sql = R"(
+  const char *sql = R"(
         SELECT u.id, u.username, u.user_state
         FROM accounts u
         JOIN friendships f
@@ -292,29 +291,29 @@ std::vector<FriendInfo> getAllFriend(const int user_id)
         )
     )";
 
-    if (sqlite3_prepare_v2(g_db, sql, -1, &stmt, nullptr) != SQLITE_OK)
-    {
-        std::cerr << "❌ Prepare failed (getAllFriend): "
-                  << sqlite3_errmsg(g_db) << std::endl;
-        return friends;
-    }
-
-    sqlite3_bind_int(stmt, 1, user_id);
-    sqlite3_bind_int(stmt, 2, user_id);
-
-    while (sqlite3_step(stmt) == SQLITE_ROW)
-    {
-        FriendInfo f;
-
-        f.id = sqlite3_column_int(stmt, 0);
-        f.username = reinterpret_cast<const char *>(
-            sqlite3_column_text(stmt, 1));
-        f.status = reinterpret_cast<const char *>(
-            sqlite3_column_text(stmt, 2));
-
-        friends.push_back(f);
-    }
-
-    sqlite3_finalize(stmt);
+  if (sqlite3_prepare_v2(g_db, sql, -1, &stmt, nullptr) != SQLITE_OK)
+  {
+    std::cerr << "❌ Prepare failed (getAllFriend): "
+              << sqlite3_errmsg(g_db) << std::endl;
     return friends;
+  }
+
+  sqlite3_bind_int(stmt, 1, user_id);
+  sqlite3_bind_int(stmt, 2, user_id);
+
+  while (sqlite3_step(stmt) == SQLITE_ROW)
+  {
+    FriendInfo f;
+
+    f.id = sqlite3_column_int(stmt, 0);
+    f.username = reinterpret_cast<const char *>(
+        sqlite3_column_text(stmt, 1));
+    f.status = reinterpret_cast<const char *>(
+        sqlite3_column_text(stmt, 2));
+
+    friends.push_back(f);
+  }
+
+  sqlite3_finalize(stmt);
+  return friends;
 }

@@ -32,7 +32,7 @@ void create_tables(sqlite3 *db)
                 "    password TEXT NOT NULL,"
                 "    account_status TEXT DEFAULT 'active' CHECK(account_status IN ('active', 'banned')),"
                 "    user_state TEXT DEFAULT 'offline' CHECK(user_state IN ('online', 'offline', 'away')),"
-                "    created_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))"
+                "    created_at INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP"
                 ");",
                 "accounts table created");
 
@@ -42,8 +42,7 @@ void create_tables(sqlite3 *db)
                 "    request_id INTEGER PRIMARY KEY AUTOINCREMENT,"
                 "    sender_id INTEGER NOT NULL,"
                 "    receiver_id INTEGER NOT NULL,"
-                "    status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'accepted', 'rejected')),"
-                "    timestamp INTEGER NOT NULL DEFAULT (strftime('%s','now')),"
+                "    timestamp INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP,"
                 "    FOREIGN KEY(sender_id) REFERENCES accounts(id) ON DELETE CASCADE,"
                 "    FOREIGN KEY(receiver_id) REFERENCES accounts(id) ON DELETE CASCADE,"
                 "    UNIQUE(sender_id, receiver_id),"
@@ -57,7 +56,7 @@ void create_tables(sqlite3 *db)
                 "    friendship_id INTEGER PRIMARY KEY AUTOINCREMENT,"
                 "    user_id1 INTEGER NOT NULL,"
                 "    user_id2 INTEGER NOT NULL,"
-                "    created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),"
+                "    created_at INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP,"
                 "    FOREIGN KEY(user_id1) REFERENCES accounts(id) ON DELETE CASCADE,"
                 "    FOREIGN KEY(user_id2) REFERENCES accounts(id) ON DELETE CASCADE,"
                 "    UNIQUE(user_id1, user_id2),"
@@ -69,9 +68,9 @@ void create_tables(sqlite3 *db)
     execute_sql(db,
                 "CREATE TABLE IF NOT EXISTS groups ("
                 "    group_id INTEGER PRIMARY KEY AUTOINCREMENT,"
-                "    group_name TEXT NOT NULL,"
+                "    group_name TEXT UNIQUE NOT NULL,"
                 "    created_by INTEGER NOT NULL,"
-                "    created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),"
+                "    created_at INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP,"
                 "    FOREIGN KEY(created_by) REFERENCES accounts(id) ON DELETE CASCADE"
                 ");",
                 "groups table created");
@@ -81,11 +80,11 @@ void create_tables(sqlite3 *db)
                 "CREATE TABLE IF NOT EXISTS group_members ("
                 "    group_id INTEGER NOT NULL,"
                 "    user_id INTEGER NOT NULL,"
-                "    role TEXT DEFAULT 'member' CHECK(role IN ('admin', 'member')),"
-                "    joined_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),"
+                "    joined_at INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP,"
                 "    PRIMARY KEY(group_id, user_id),"
                 "    FOREIGN KEY(group_id) REFERENCES groups(group_id) ON DELETE CASCADE,"
-                "    FOREIGN KEY(user_id) REFERENCES accounts(id) ON DELETE CASCADE"
+                "    FOREIGN KEY(user_id) REFERENCES accounts(id) ON DELETE CASCADE,"
+                "    UNIQUE(group_id, user_id)"
                 ");",
                 "group_members table created");
 
@@ -97,7 +96,7 @@ void create_tables(sqlite3 *db)
                 "    receiver_id INTEGER,"
                 "    group_id INTEGER,"
                 "    content TEXT NOT NULL,"
-                "    timestamp INTEGER NOT NULL DEFAULT (strftime('%s','now')),"
+                "    timestamp INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP,"
                 "    is_read INTEGER DEFAULT 0 CHECK(is_read IN (0, 1)),"
                 "    is_offline INTEGER DEFAULT 0 CHECK(is_offline IN (0, 1)),"
                 "    FOREIGN KEY(sender_id) REFERENCES accounts(id) ON DELETE CASCADE,"
@@ -107,6 +106,7 @@ void create_tables(sqlite3 *db)
                 ");",
                 "messages table created");
 
+
     // activity_logs table
     execute_sql(db,
                 "CREATE TABLE IF NOT EXISTS activity_logs ("
@@ -114,7 +114,7 @@ void create_tables(sqlite3 *db)
                 "    user_id INTEGER,"
                 "    action_type TEXT NOT NULL,"
                 "    details TEXT,"
-                "    timestamp INTEGER NOT NULL DEFAULT (strftime('%s','now')),"
+                "    timestamp INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP,"
                 "    FOREIGN KEY(user_id) REFERENCES accounts(id) ON DELETE SET NULL"
                 ");",
                 "activity_logs table created");
@@ -156,12 +156,12 @@ void seed_data(sqlite3 *db)
 
     // Insert friend requests
     std::string insert_friend_requests =
-        "INSERT OR IGNORE INTO friend_requests (sender_id, receiver_id, status, timestamp) VALUES "
-        "(1, 4, 'pending', " +
+        "INSERT OR IGNORE INTO friend_requests (sender_id, receiver_id, timestamp) VALUES "
+        "(1, 4, " +
         std::to_string(day_ago) + ")," // alice -> diana (pending)
-                                  "(2, 5, 'rejected', " +
+                                  "(2, 5," +
         std::to_string(week_ago) + ")," // bob -> eve (rejected)
-                                   "(4, 1, 'accepted', " +
+                                   "(4, 1, " +
         std::to_string(week_ago) + ");"; // diana -> alice (accepted)
     execute_sql(db, insert_friend_requests.c_str(), "friend_requests seeded");
 
@@ -178,22 +178,22 @@ void seed_data(sqlite3 *db)
 
     // Insert group members
     std::string insert_group_members =
-        "INSERT OR IGNORE INTO group_members (group_id, user_id, role, joined_at) VALUES "
-        "(1, 1, 'admin', " +
+        "INSERT OR IGNORE INTO group_members (group_id, user_id, joined_at) VALUES "
+        "(1, 1, " +
         std::to_string(week_ago) + ")," // Study Group: alice (admin)
-                                   "(1, 2, 'member', " +
+                                   "(1, 2, " +
         std::to_string(week_ago) + ")," // Study Group: bob
-                                   "(1, 3, 'member', " +
+                                   "(1, 3, " +
         std::to_string(week_ago) + ")," // Study Group: charlie
-                                   "(2, 2, 'admin', " +
+                                   "(2, 2, " +
         std::to_string(week_ago) + ")," // Gaming Squad: bob (admin)
-                                   "(2, 3, 'member', " +
+                                   "(2, 3, " +
         std::to_string(week_ago) + ")," // Gaming Squad: charlie
-                                   "(3, 3, 'admin', " +
+                                   "(3, 3, " +
         std::to_string(day_ago) + ")," // Work Team: charlie (admin)
-                                  "(3, 1, 'member', " +
+                                  "(3, 1, " +
         std::to_string(day_ago) + ")," // Work Team: alice
-                                  "(3, 4, 'member', " +
+                                  "(3, 4, " +
         std::to_string(day_ago) + ");"; // Work Team: diana
     execute_sql(db, insert_group_members.c_str(), "group_members seeded");
 
