@@ -9,6 +9,7 @@ sqlite3* db_init(const char* db_path);
 void db_close(sqlite3* db);
 
 // Account operations
+int getUserIdByUsername(const std::string& username);
 int db_register_user(sqlite3* db, const std::string& username, const std::string& password, int* user_id);
 int db_verify_login(sqlite3* db, const std::string& username, const std::string& password, int* user_id);
 int db_update_user_state(sqlite3* db, int user_id, const std::string& state);

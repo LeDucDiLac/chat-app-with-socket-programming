@@ -285,7 +285,7 @@ ACCEPT_FRIEND_REQUEST (1006):
     {
         "type": 1006,
         "data": {
-            "request_id": 1
+            "target_username": abc
         }
     }
     

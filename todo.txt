@@ -1,0 +1,7 @@
+duc:
+  fix bug ctrl c phia client ko chuyen offline
+  dung \r\n thoi xin m
+
+hieu:
+  xoa cot status cua friend request
+  addfriend khong sua db
