@@ -12,6 +12,8 @@
 #include "db_manager.h"
 #include "../../libs/json.hpp"
 
+#include "friend_service.h"
+
 using json = nlohmann::json;
 
 #define BACKLOG 10
@@ -37,6 +39,7 @@ void handle_login(int client_sock, const json& request);
 void handle_logout(int client_sock, const json& request);
 void handle_send_message(int client_sock, const json& request);
 void handle_send_group_message(int client_sock, const json& request);
+void handle_get_friend_request(int client_sock, const json& request);
 void handle_send_friend_request(int client_sock, const json& request);
 void handle_accept_friend_request(int client_sock, const json& request);
 void handle_reject_friend_request(int client_sock, const json& request);
@@ -102,19 +105,22 @@ void process_client_request(int client_sock, const json& request)
             case 1004: // SEND_GROUP_MESSAGE
                 handle_send_group_message(client_sock, request);
                 break;
-            case 1005: // SEND_FRIEND_REQUEST
+            case 3000: // SEND_FRIEND_REQUEST
+                handle_get_friend_request(client_sock, request);
+                break;
+            case 3001: // SEND_FRIEND_REQUEST
                 handle_send_friend_request(client_sock, request);
                 break;
-            case 1006: // ACCEPT_FRIEND_REQUEST
+            case 3002: // ACCEPT_FRIEND_REQUEST
                 handle_accept_friend_request(client_sock, request);
                 break;
-            case 1007: // REJECT_FRIEND_REQUEST
+            case 3003: // REJECT_FRIEND_REQUEST
                 handle_reject_friend_request(client_sock, request);
                 break;
-            case 1008: // UNFRIEND
+            case 3004: // UNFRIEND
                 handle_unfriend(client_sock, request);
                 break;
-            case 1009: // GET_FRIEND_LIST
+            case 3005: // GET_FRIEND_LIST
                 handle_get_friend_list(client_sock, request);
                 break;
             case 1010: // CREATE_GROUP
@@ -504,39 +510,274 @@ void handle_send_group_message(int client_sock, const json& request)
     send_response(client_sock, 200, "Send group message feature not implemented yet");
 }
 
+void handle_get_friend_request(int client_sock, const json& request)
+{
+    // 1. Lấy session người gửi
+    Session* session = find_session_by_socket(client_sock);
+    if (!session) {
+        send_response(client_sock, 401, "You are not logged in");
+        return;
+    }
+    int receiver_id = session->user_id;
+    auto requests = getAllFriendRequests(receiver_id);
+    json response;
+    response["type"] = 2003;
+    response["data"]["friend_requests"] = json::array();
+
+    for (const auto &req : requests)
+    {
+        response["data"]["friend_requests"].push_back({
+            {"username", req.sender_username},
+            {"timestamp", req.timestamp}
+        });
+    }
+
+    std::string response_str = response.dump();
+    send_json_packet(client_sock, response_str.c_str());
+}
+
 void handle_send_friend_request(int client_sock, const json& request)
 {
-    // TODO: Implement send friend request
-    std::cout << "[PLACEHOLDER] SEND_FRIEND_REQUEST called" << std::endl;
-    send_response(client_sock, 200, "Send friend request feature not implemented yet");
+    // 1. Lấy session người gửi
+    Session* senderSession = find_session_by_socket(client_sock);
+
+    if (!senderSession) {
+        send_response(client_sock, 401, "Session not found");
+        return;
+    }
+
+    // 2. Lấy username người nhận từ JSON
+    if (!request.contains("data") || !request["data"].contains("target_username")) {
+        send_response(client_sock, 400, "Missing receiver username");
+        return;
+    }
+
+    std::string receiverUsername = request["data"]["target_username"];
+
+    // 3. Lấy user id từ DB
+    int senderId   =  senderSession->user_id;
+    int receiverId = getUserIdByUsername(receiverUsername);
+
+    std::cout << senderId << receiverId << std::endl;
+
+    if (receiverId == -1) {
+        send_response(client_sock, 404, "Receiver not found");
+        return;
+    }
+
+    if (senderId == receiverId) {
+        send_response(client_sock, 400, "You cannot send friend request to yourself");
+        return;
+    }
+
+    // 4. Kiểm tra đã gửi chưa
+    if (friendRequestExists(senderId, receiverId)) {
+        send_response(client_sock, 409, "Friend request already exists");
+        return;
+    }
+
+    if (friendshipExists(senderId, receiverId)) {
+        send_response(client_sock, 409, "Already friend");
+        return;
+    }
+
+    // 5. Thêm vào database
+    if (!addFriendRequest(senderId, receiverId)) {
+        send_response(client_sock, 500, "Failed to create friend request");
+        return;
+    }
+
+    // 6. Thành công
+    send_response(client_sock, 200, "Friend request sent successfully");
 }
 
 void handle_accept_friend_request(int client_sock, const json& request)
 {
-    // TODO: Implement accept friend request
-    std::cout << "[PLACEHOLDER] ACCEPT_FRIEND_REQUEST called" << std::endl;
-    send_response(client_sock, 200, "Accept friend request feature not implemented yet");
+    // 1. Lấy session
+    Session* session = find_session_by_socket(client_sock);
+    if (!session)
+    {
+        send_response(client_sock, 401, "You are not authenticated");
+        return;
+    }
+
+    int receiver_id = session->user_id;            // người accept
+    std::string receiver_username = session->username;
+
+    // 2. Lấy username của người gửi lời mời
+    if (!request.contains("data") || 
+        !request["data"].contains("target_username"))
+    {
+        send_response(client_sock, 400, "Invalid request format");
+        return;
+    }
+
+    std::string sender_username = request["data"]["target_username"];
+
+    // 3. Lấy sender_id từ username
+    int sender_id = getUserIdByUsername(sender_username);
+    if (sender_id == -1)
+    {
+        send_response(client_sock, 404, "User not found");
+        return;
+    }
+
+    // 4. Kiểm tra đã là bạn bè chưa
+    if (friendshipExists(sender_id, receiver_id))
+    {
+        send_response(client_sock, 409, "You are already friends");
+        return;
+    }
+
+    // 5. Kiểm tra có request tồn tại không (sender -> receiver)
+    if (!friendRequestExists(sender_id, receiver_id))
+    {
+        send_response(client_sock, 404, "Friend request not found");
+        return;
+    }
+
+    // 6. Thêm vào bảng friends
+    if (!addFriendship(sender_id, receiver_id))
+    {
+        send_response(client_sock, 500, "Failed to add friend");
+        return;
+    }
+
+    // 7. Xóa friend request
+    if (!removeFriendRequest(sender_id, receiver_id))
+    {
+        send_response(client_sock, 500, "Failed to delete friend request");
+        return;
+    }
+
+    send_response(client_sock, 200, "Friend added");
 }
 
 void handle_reject_friend_request(int client_sock, const json& request)
 {
-    // TODO: Implement reject friend request
-    std::cout << "[PLACEHOLDER] REJECT_FRIEND_REQUEST called" << std::endl;
-    send_response(client_sock, 200, "Reject friend request feature not implemented yet");
+    // 1. Lấy session
+    Session* session = find_session_by_socket(client_sock);
+    if (!session)
+    {
+        send_response(client_sock, 401, "You are not authenticated");
+        return;
+    }
+
+    int receiver_id = session->user_id;            // người accept
+    std::string receiver_username = session->username;
+
+    // 2. Lấy username của người gửi lời mời
+    if (!request.contains("data") || 
+        !request["data"].contains("target_username"))
+    {
+        send_response(client_sock, 400, "Invalid request format");
+        return;
+    }
+
+    std::string sender_username = request["data"]["target_username"];
+
+    // 3. Lấy sender_id từ username
+    int sender_id = getUserIdByUsername(sender_username);
+    if (sender_id == -1)
+    {
+        send_response(client_sock, 404, "User not found");
+        return;
+    }
+
+    // 4. Kiểm tra đã là bạn bè chưa
+    if (friendshipExists(sender_id, receiver_id))
+    {
+        send_response(client_sock, 409, "You are already friends");
+        return;
+    }
+
+    // 5. Kiểm tra có request tồn tại không (sender -> receiver)
+    if (!friendRequestExists(sender_id, receiver_id))
+    {
+        send_response(client_sock, 404, "Friend request not found");
+        return;
+    }
+
+    // 7. Xóa friend request
+    if (!removeFriendRequest(sender_id, receiver_id))
+    {
+        send_response(client_sock, 500, "Failed to delete friend request");
+        return;
+    }
+
+    send_response(client_sock, 200, "Friend request rejected");
 }
 
 void handle_unfriend(int client_sock, const json& request)
 {
-    // TODO: Implement unfriend
-    std::cout << "[PLACEHOLDER] UNFRIEND called" << std::endl;
-    send_response(client_sock, 200, "Unfriend feature not implemented yet");
+    // 1. Lấy session
+    Session* session = find_session_by_socket(client_sock);
+    if (!session)
+    {
+        send_response(client_sock, 401, "You are not authenticated");
+        return;
+    }
+
+    int user_id1 = session->user_id;
+
+    if (!request.contains("data") || 
+        !request["data"].contains("target_username"))
+    {
+        send_response(client_sock, 400, "Invalid request format");
+        return;
+    }
+
+    std::string target_username = request["data"]["target_username"];
+
+    // 3. Lấy sender_id từ username
+    int user_id2 = getUserIdByUsername(target_username);
+    if (user_id2 == -1)
+    {
+        send_response(client_sock, 404, "User not found");
+        return;
+    }
+
+    // 4. Kiểm tra đã là bạn bè chưa
+    if (!friendshipExists(user_id1, user_id2))
+    {
+        send_response(client_sock, 409, "You are not friends");
+        return;
+    }
+
+    if (!removeFriendship(user_id1, user_id2))
+    {
+        send_response(client_sock, 500, "Failed to unfriend");
+        return;
+    }
+
+    send_response(client_sock, 200, "Unfriend successfully");
 }
 
 void handle_get_friend_list(int client_sock, const json& request)
 {
-    // TODO: Implement get friend list
-    std::cout << "[PLACEHOLDER] GET_FRIEND_LIST called" << std::endl;
-    send_response(client_sock, 200, "Get friend list feature not implemented yet");
+    Session* session = find_session_by_socket(client_sock);
+    if (!session)
+    {
+        send_response(client_sock, 401, "You are not authenticated");
+        return;
+    }
+    int user_id = session->user_id;
+    auto friends = getAllFriend(user_id);
+
+    json response;
+    response["type"] = 2004;
+    response["data"]["friends"] = json::array();
+
+    for (const auto &f : friends)
+    {
+        response["data"]["friends"].push_back({
+            {"id", f.id},
+            {"username", f.username},
+            {"user_state", f.status}
+        });
+    }
+    std::string response_str = response.dump();
+    send_json_packet(client_sock, response_str.c_str());
 }
 
 void handle_create_group(int client_sock, const json& request)

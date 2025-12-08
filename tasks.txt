@@ -11,7 +11,7 @@
 - Tạo nhóm chat: 1 điểm - Hiếu  
 - Thêm người dùng khác vào nhóm chat: 1 điểm - Hiếu
 - Xóa người dùng ra khỏi nhóm chat: 1 điểm - Hiếu
-- Rời nhóm chat: 1 điểm - Hiếu
-- Gửi nhận thông điệp trong nhóm chat: 1 điểm - Hiếu
+- Rời nhóm chat: 1 điểm - Hiếu
+- Gửi nhận thông điệp trong nhóm chat: 1 điểm - Hiếu
 - Gửi tin nhắn offline: 1 điểm - Đức
 - Ghi log hoạt động: 1 điểm - Hiếu

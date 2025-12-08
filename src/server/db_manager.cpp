@@ -36,6 +36,29 @@ void db_close(sqlite3* db)
     }
 }
 
+int getUserIdByUsername(const std::string& username) {
+    sqlite3* db = db_init("database/chat.db");
+    const char *sql = "SELECT id FROM accounts WHERE username = ? LIMIT 1;";
+    sqlite3_stmt *stmt;
+    int userId = -1;
+
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        std::cerr << "Prepare failed: " << sqlite3_errmsg(db) << std::endl;
+        return -1;
+    }
+
+    // Bind username vào ?
+    sqlite3_bind_text(stmt, 1, username.c_str(), -1, SQLITE_STATIC);
+
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        userId = sqlite3_column_int(stmt, 0);
+    }
+
+    sqlite3_finalize(stmt);
+    db_close(db);
+    return userId;   // -1 nếu không tìm thấy
+}
+
 /**
  * Register a new user
  * Returns: DB_SUCCESS, DB_USER_EXISTS, or DB_ERROR

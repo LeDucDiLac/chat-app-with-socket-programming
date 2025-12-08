@@ -16,6 +16,7 @@ SERVER_SRC = $(SERVER_DIR)/server.cpp
 CLIENT_SRC = $(CLIENT_DIR)/client.cpp
 PROTOCOL_SRC = $(UTILS_DIR)/protocol.cpp
 DB_MANAGER_SRC = $(SERVER_DIR)/db_manager.cpp
+FRIEND_SERVICE = $(SERVER_DIR)/friend_service.cpp
 
 TEST_SRC= $(SERVER_DIR)/test.c
 TEST_JSON_SRC= $(SERVER_DIR)/test_json.cpp
@@ -31,8 +32,8 @@ CLIENT_BIN = client
 all: server client
 
 # Build server
-server: $(SERVER_SRC) $(PROTOCOL_SRC) $(DB_MANAGER_SRC)
-	$(CXX) $(CXXFLAGS) -pthread $(SERVER_SRC) $(PROTOCOL_SRC) $(DB_MANAGER_SRC) -o $(SERVER_BIN) $(LDFLAGS_SQLITE)
+server: $(SERVER_SRC) $(PROTOCOL_SRC) $(DB_MANAGER_SRC) $(FRIEND_SERVICE)
+	$(CXX) $(CXXFLAGS) -pthread $(SERVER_SRC) $(PROTOCOL_SRC) $(DB_MANAGER_SRC) $(FRIEND_SERVICE) -o $(SERVER_BIN) $(LDFLAGS_SQLITE)
 
 # Build client
 client: $(CLIENT_SRC) $(PROTOCOL_SRC)
