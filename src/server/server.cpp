@@ -385,17 +385,7 @@ void handle_login(int client_sock, const json& request)
             pthread_mutex_lock(&sessions_mutex);
             
             // Check if this socket already has a session
-            bool socket_has_session = false;
-            for (const auto& session : active_sessions)
-            {
-                if (session.socket_fd == client_sock)
-                {
-                    socket_has_session = true;
-                    break;
-                }
-            }
-            
-            if (socket_has_session)
+            if (find_session_by_socket(client_sock) != nullptr)
             {
                 pthread_mutex_unlock(&sessions_mutex);
                 send_response(client_sock, 409, "Already logged in. Please logout first");
@@ -457,38 +447,35 @@ void handle_logout(int client_sock, const json& request)
     std::cout << "[LOGOUT] Request from socket " << client_sock << std::endl;
     
     pthread_mutex_lock(&sessions_mutex);
-    Session* session = find_session_by_socket(client_sock);
     
-    if (session == nullptr)
-    {
-        pthread_mutex_unlock(&sessions_mutex);
-        send_response(client_sock, 401, "Not logged in");
-        return;
-    }
-    
-    int user_id = session->user_id;
-    std::string username = session->username;
-    
-    // Remove session
-    for (auto it = active_sessions.begin(); it != active_sessions.end(); ++it)
+    // Find and remove session
+    auto it = active_sessions.begin();
+    while (it != active_sessions.end())
     {
         if (it->socket_fd == client_sock)
         {
+            int user_id = it->user_id;
+            std::string username = it->username;
+            
             active_sessions.erase(it);
-            break;
+            pthread_mutex_unlock(&sessions_mutex);
+            
+            // Update user state to offline
+            db_update_user_state(g_db, user_id, "offline");
+            
+            // Log logout activity
+            db_log_activity(g_db, user_id, "logout", "User logged out");
+            
+            send_response(client_sock, 200, "Logout successful");
+            
+            std::cout << "[LOGOUT] Success: " << username << " (ID: " << user_id << ")" << std::endl;
+            return;
         }
+        ++it;
     }
+    
     pthread_mutex_unlock(&sessions_mutex);
-    
-    // Update user state to offline
-    db_update_user_state(g_db, user_id, "offline");
-    
-    // Log logout activity
-    db_log_activity(g_db, user_id, "logout", "User logged out");
-    
-    send_response(client_sock, 200, "Logout successful");
-    
-    std::cout << "[LOGOUT] Success: " << username << " (ID: " << user_id << ")" << std::endl;
+    send_response(client_sock, 401, "Not logged in");
 }
 
 void handle_send_message(int client_sock, const json& request)

@@ -83,6 +83,7 @@ static int recv_all(int socket_fd, void *buffer, size_t length)
 /**
  * Send a JSON packet with length prefix and \r\n delimiter
  * Format: [LENGTH:4bytes in network byte order][JSON string][\r\n]
+ * CAN BE FURTHER OPTIMIZED TO USE DELIMITER TO BOOST READING
  */
 int send_json_packet(int socket_fd, const char *json_str)
 {
