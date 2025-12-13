@@ -11,6 +11,7 @@ SERVER_DIR = src/server
 CLIENT_DIR = src/client
 UTILS_DIR = src/utils
 DATABASE_DIR = database
+TEST_DIR = test
 
 # Source files
 SERVER_SRC = $(SERVER_DIR)/server.cpp
@@ -21,14 +22,12 @@ FRIEND_SERVICE = $(SERVER_DIR)/friend_service.cpp
 GROUP_SERVICE = $(SERVER_DIR)/group_service.cpp
 DATABASE_RESET = $(DATABASE_DIR)/reset_db.cpp # Vẫn giữ khai báo này
 
-TEST_SRC= $(SERVER_DIR)/test.c
-TEST_JSON_SRC= $(SERVER_DIR)/test_json.cpp
-TEST_PROTOCOL_SRC= $(SERVER_DIR)/test_protocol.cpp
-TEST_PIPELINED_SRC= $(SERVER_DIR)/test_pipelined.cpp
-TEST_FRIENDS_SRC= $(SERVER_DIR)/test_friends.cpp
-TEST_GROUPS_SRC= $(SERVER_DIR)/test_groups.cpp
-TEST_COMPLETE_SRC= $(SERVER_DIR)/test_complete.cpp
-INIT_DB_SRC= $(SERVER_DIR)/init_db.cpp
+TEST_JSON_SRC= $(TEST_DIR)/test_json.cpp
+TEST_PROTOCOL_SRC= $(TEST_DIR)/test_protocol.cpp
+TEST_PIPELINED_SRC= $(TEST_DIR)/test_pipelined.cpp
+TEST_FRIENDS_SRC= $(TEST_DIR)/test_friends.cpp
+TEST_GROUPS_SRC= $(TEST_DIR)/test_groups.cpp
+TEST_COMPLETE_SRC= $(TEST_DIR)/test_complete.cpp
 
 # Output executables
 SERVER_BIN = server
@@ -47,7 +46,7 @@ client: $(CLIENT_SRC) $(PROTOCOL_SRC)
 
 # Clean compiled files
 clean:
-	rm -f $(SERVER_BIN) $(CLIENT_BIN) test test_json test_protocol test_pipelined init_db
+	rm -f $(SERVER_BIN) $(CLIENT_BIN)  test_json test_protocol test_pipelined init_db
 	rm -f test_friends test_groups test_complete
 	rm -f $(SERVER_DIR)/*.o $(CLIENT_DIR)/*.o
 	rm -f reset-db reset-db.* # Cập nhật: thêm lệnh xóa reset-db
@@ -55,8 +54,6 @@ clean:
 # Clean and rebuild
 rebuild: clean all
 
-test: $(TEST_SRC)
-	$(CC) -o test $(TEST_SRC) $(LDFLAGS_SQLITE)
 
 test-json: $(TEST_JSON_SRC)
 	$(CXX) $(CXXFLAGS) -o test_json $(TEST_JSON_SRC) $(LDFLAGS_SQLITE)
