@@ -3,8 +3,14 @@
 /client
 init_db
 reset-db
-test_*
 .vscode
+chat.db
+test_auth
+test_complete
+test_groups
+test_friends
+
+
 
 # Build artifacts
 *.o

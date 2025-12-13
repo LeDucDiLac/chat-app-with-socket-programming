@@ -9,7 +9,7 @@
 #include <pthread.h>
 #include <sqlite3.h>
 #include "protocol.h"
-#include "db_manager.h"
+#include "account_service.h"
 #include "../../libs/json.hpp"
 
 #include "friend_service.h"
@@ -215,7 +215,7 @@ int main(int argc, char* argv[])
     }
     
     // Initialize database
-    g_db = db_init("database/chat.db");
+    g_db = init_database("database/chat.db");
     if (g_db == nullptr)
     {
         std::cerr << "[ERROR] Failed to initialize database" << std::endl;
@@ -300,7 +300,7 @@ int main(int argc, char* argv[])
     }
     
     close(listen_sock);
-    db_close(g_db);
+    close_database(g_db);
     return 0;
 }
 
@@ -318,7 +318,7 @@ void handle_register(int client_sock, const json& request)
         std::cout << "[REGISTER] Request from username: " << username << std::endl;
         
         int user_id;
-        int result = db_register_user(g_db, username, password, &user_id);
+        int result = register_user(g_db, username, password, &user_id);
         
         if (result == DB_USER_EXISTS)
         {
@@ -331,7 +331,7 @@ void handle_register(int client_sock, const json& request)
         else
         {
             // Log registration activity
-            db_log_activity(g_db, user_id, "register", "User registered");
+            log_activity(g_db, user_id, "register", "User registered");
             
             json response = {
                 {"type", 2000},
@@ -363,7 +363,7 @@ void handle_login(int client_sock, const json& request)
         std::cout << "[LOGIN] Request from username: " << username << std::endl;
         
         int user_id;
-        int result = db_verify_login(g_db, username, password, &user_id);
+        int result = verify_login(g_db, username, password, &user_id);
         
         if (result == DB_USER_NOT_FOUND)
         {
@@ -417,10 +417,10 @@ void handle_login(int client_sock, const json& request)
             pthread_mutex_unlock(&sessions_mutex);
             
             // Update user state to online
-            db_update_user_state(g_db, user_id, "online");
+            update_user_state(g_db, user_id, "online");
             
             // Log login activity
-            db_log_activity(g_db, user_id, "login", "User logged in");
+            log_activity(g_db, user_id, "login", "User logged in");
             
             json response = {
                 {"type", 2000},
@@ -462,10 +462,10 @@ void handle_logout(int client_sock, const json& request)
             pthread_mutex_unlock(&sessions_mutex);
             
             // Update user state to offline
-            db_update_user_state(g_db, user_id, "offline");
+            update_user_state(g_db, user_id, "offline");
             
             // Log logout activity
-            db_log_activity(g_db, user_id, "logout", "User logged out");
+            log_activity(g_db, user_id, "logout", "User logged out");
             
             send_response(client_sock, 200, "Logout successful");
             
@@ -507,7 +507,7 @@ void handle_get_friend_request(int client_sock, const json& request)
         return;
     }
     int receiver_id = session->user_id;
-    auto requests = getAllFriendRequests(receiver_id);
+    auto requests = get_all_friend_requests(g_db, receiver_id);
     json response;
     response["type"] = 2003;
     response["data"]["friend_requests"] = json::array();
@@ -544,7 +544,7 @@ void handle_send_friend_request(int client_sock, const json& request)
 
     // 3. Lấy user id từ DB
     int senderId   =  senderSession->user_id;
-    int receiverId = getUserIdByUsername(receiverUsername);
+    int receiverId = get_user_id_by_username(g_db, receiverUsername);
 
     std::cout << senderId << receiverId << std::endl;
 
@@ -559,18 +559,18 @@ void handle_send_friend_request(int client_sock, const json& request)
     }
 
     // 4. Kiểm tra đã gửi chưa
-    if (friendRequestExists(senderId, receiverId)) {
+    if (friend_request_exists(g_db, senderId, receiverId)) {
         send_response(client_sock, 409, "Friend request already exists");
         return;
     }
 
-    if (friendshipExists(senderId, receiverId)) {
+    if (friendship_exists(g_db, senderId, receiverId)) {
         send_response(client_sock, 409, "Already friend");
         return;
     }
 
     // 5. Thêm vào database
-    if (!addFriendRequest(senderId, receiverId)) {
+    if (!add_friend_request(g_db, senderId, receiverId)) {
         send_response(client_sock, 500, "Failed to create friend request");
         return;
     }
@@ -603,7 +603,7 @@ void handle_accept_friend_request(int client_sock, const json& request)
     std::string sender_username = request["data"]["target_username"];
 
     // 3. Lấy sender_id từ username
-    int sender_id = getUserIdByUsername(sender_username);
+    int sender_id = get_user_id_by_username(g_db, sender_username);
     if (sender_id == -1)
     {
         send_response(client_sock, 404, "User not found");
@@ -611,28 +611,28 @@ void handle_accept_friend_request(int client_sock, const json& request)
     }
 
     // 4. Kiểm tra đã là bạn bè chưa
-    if (friendshipExists(sender_id, receiver_id))
+    if (friendship_exists(g_db, sender_id, receiver_id))
     {
         send_response(client_sock, 409, "You are already friends");
         return;
     }
 
     // 5. Kiểm tra có request tồn tại không (sender -> receiver)
-    if (!friendRequestExists(sender_id, receiver_id))
+    if (!friend_request_exists(g_db, sender_id, receiver_id))
     {
         send_response(client_sock, 404, "Friend request not found");
         return;
     }
 
     // 6. Thêm vào bảng friends
-    if (!addFriendship(sender_id, receiver_id))
+    if (!add_friendship(g_db, sender_id, receiver_id))
     {
         send_response(client_sock, 500, "Failed to add friend");
         return;
     }
 
     // 7. Xóa friend request
-    if (!removeFriendRequest(sender_id, receiver_id))
+    if (!remove_friend_request(g_db, sender_id, receiver_id))
     {
         send_response(client_sock, 500, "Failed to delete friend request");
         return;
@@ -665,7 +665,7 @@ void handle_reject_friend_request(int client_sock, const json& request)
     std::string sender_username = request["data"]["target_username"];
 
     // 3. Lấy sender_id từ username
-    int sender_id = getUserIdByUsername(sender_username);
+    int sender_id = get_user_id_by_username(g_db, sender_username);
     if (sender_id == -1)
     {
         send_response(client_sock, 404, "User not found");
@@ -673,21 +673,21 @@ void handle_reject_friend_request(int client_sock, const json& request)
     }
 
     // 4. Kiểm tra đã là bạn bè chưa
-    if (friendshipExists(sender_id, receiver_id))
+    if (friendship_exists(g_db, sender_id, receiver_id))
     {
         send_response(client_sock, 409, "You are already friends");
         return;
     }
 
     // 5. Kiểm tra có request tồn tại không (sender -> receiver)
-    if (!friendRequestExists(sender_id, receiver_id))
+    if (!friend_request_exists(g_db, sender_id, receiver_id))
     {
         send_response(client_sock, 404, "Friend request not found");
         return;
     }
 
     // 7. Xóa friend request
-    if (!removeFriendRequest(sender_id, receiver_id))
+    if (!remove_friend_request(g_db, sender_id, receiver_id))
     {
         send_response(client_sock, 500, "Failed to delete friend request");
         return;
@@ -718,7 +718,7 @@ void handle_unfriend(int client_sock, const json& request)
     std::string target_username = request["data"]["target_username"];
 
     // 3. Lấy sender_id từ username
-    int user_id2 = getUserIdByUsername(target_username);
+    int user_id2 = get_user_id_by_username(g_db, target_username);
     if (user_id2 == -1)
     {
         send_response(client_sock, 404, "User not found");
@@ -726,13 +726,13 @@ void handle_unfriend(int client_sock, const json& request)
     }
 
     // 4. Kiểm tra đã là bạn bè chưa
-    if (!friendshipExists(user_id1, user_id2))
+    if (!friendship_exists(g_db, user_id1, user_id2))
     {
         send_response(client_sock, 409, "You are not friends");
         return;
     }
 
-    if (!removeFriendship(user_id1, user_id2))
+    if (!remove_friendship(g_db, user_id1, user_id2))
     {
         send_response(client_sock, 500, "Failed to unfriend");
         return;
@@ -750,7 +750,7 @@ void handle_get_friend_list(int client_sock, const json& request)
         return;
     }
     int user_id = session->user_id;
-    auto friends = getAllFriend(user_id);
+    auto friends = get_all_friends(g_db, user_id);
 
     json response;
     response["type"] = 2004;
@@ -792,7 +792,7 @@ void handle_create_group(int client_sock, const json& request)
 
     std::cout << "[CREATE_GROUP] Request from user ID " << creator_id << " for group: " << group_name << std::endl;
 
-    if (createGroup(group_name, creator_id))
+    if (create_group(g_db, group_name, creator_id))
     {
         send_response(client_sock, 200, "Group created successfully");
         std::cerr << "[CREATE_GROUP] Success" << std::endl;
@@ -829,7 +829,7 @@ void handle_add_to_group(int client_sock, const json& request)
     std::string target_username = request["data"]["target_username"];
 
     // 3. Lấy Group ID
-    int group_id = getGroupIdByName(group_name);
+    int group_id = get_group_id_by_name(g_db, group_name);
     if (group_id == -1)
     {
         send_response(client_sock, 404, "Group not found");
@@ -837,7 +837,7 @@ void handle_add_to_group(int client_sock, const json& request)
     }
 
     // 4. Lấy Target User ID
-    int target_user_id = getUserIdByUsername(target_username); 
+    int target_user_id = get_user_id_by_username(g_db, target_username); 
     if (target_user_id == -1)
     {
         send_response(client_sock, 404, "Target user not found");
@@ -845,14 +845,14 @@ void handle_add_to_group(int client_sock, const json& request)
     }
 
     // 5. Kiểm tra quyền (Chỉ Owner mới được thêm thành viên - Có thể mở rộng là Admin)
-    if (!isGroupOwner(group_id, requester_id))
+    if (!is_group_owner(g_db, group_id, requester_id))
     {
         send_response(client_sock, 403, "Permission denied: Only the group owner can add members");
         return;
     }
 
     // 6. Thêm thành viên vào nhóm
-    if (addGroupMember(group_id, target_user_id)) 
+    if (add_group_member(g_db, group_id, target_user_id)) 
     {
         send_response(client_sock, 200, "User added to group successfully");
     }
@@ -886,14 +886,14 @@ void handle_remove_from_group(int client_sock, const json& request)
     std::string target_username = request["data"]["target_username"];
 
     // 3. Lấy Group ID và Target User ID
-    int group_id = getGroupIdByName(group_name);
+    int group_id = get_group_id_by_name(g_db, group_name);
     if (group_id == -1)
     {
         send_response(client_sock, 404, "Group not found");
         return;
     }
 
-    int target_user_id = getUserIdByUsername(target_username);
+    int target_user_id = get_user_id_by_username(g_db, target_username);
     if (target_user_id == -1)
     {
         send_response(client_sock, 404, "Target user not found");
@@ -907,21 +907,21 @@ void handle_remove_from_group(int client_sock, const json& request)
     }
 
     // 4. Kiểm tra quyền của người yêu cầu
-    if (!isGroupOwner(group_id, requester_id))
+    if (!is_group_owner(g_db, group_id, requester_id))
     {
         send_response(client_sock, 403, "Permission denied: Only group admin or owner can remove members");
         return;
     }
     
     // 5. Kiểm tra Target User có phải là thành viên nhóm không
-    if (!isGroupMember(group_id, target_user_id))
+    if (!is_group_member(g_db, group_id, target_user_id))
     {
         send_response(client_sock, 404, "Target user is not a member of this group");
         return;
     }
     
     // 7. Thực hiện xóa thành viên
-    if (removeGroupMember(group_id, target_user_id))
+    if (remove_group_member(g_db, group_id, target_user_id))
     {
         send_response(client_sock, 200, "User removed from group successfully");
     }
@@ -953,7 +953,7 @@ void handle_leave_group(int client_sock, const json& request)
     std::string group_name = request["data"]["group_name"];
 
     // 3. Lấy Group ID
-    int group_id = getGroupIdByName(group_name);
+    int group_id = get_group_id_by_name(g_db, group_name);
     if (group_id == -1)
     {
         send_response(client_sock, 404, "Group not found");
@@ -961,17 +961,17 @@ void handle_leave_group(int client_sock, const json& request)
     }
     
     // 4. Kiểm tra xem người dùng có phải là thành viên không
-    if (!isGroupMember(group_id, user_id))
+    if (!is_group_member(g_db, group_id, user_id))
     {
         send_response(client_sock, 404, "You are not a member of this group");
         return;
     }
 
     // 5. Kiểm tra quyền sở hữu
-    if (isGroupOwner(group_id, user_id))
+    if (is_group_owner(g_db, group_id, user_id))
     {
         // 5a. Nếu là OWNER, xóa toàn bộ nhóm
-        if (deleteGroup(group_id))
+        if (delete_group(g_db, group_id))
         {
             send_response(client_sock, 200, "You left the group and the group was dissolved (Owner left)");
             // TODO: Thông báo cho tất cả thành viên khác rằng nhóm đã bị xóa.
@@ -984,7 +984,7 @@ void handle_leave_group(int client_sock, const json& request)
     else
     {
         // 5b. Nếu không phải là OWNER, chỉ xóa thành viên
-        if (removeGroupMember(group_id, user_id))
+        if (remove_group_member(g_db, group_id, user_id))
         {
             send_response(client_sock, 200, "You left the group successfully");
             // TODO: Thông báo cho admin/các thành viên khác rằng thành viên này đã rời nhóm.

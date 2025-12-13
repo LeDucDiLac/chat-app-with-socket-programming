@@ -5,8 +5,6 @@
 #include <vector>
 #include <sqlite3.h>
 
-extern sqlite3 *g_db;
-
 struct FriendInfo
 {
   int id;
@@ -22,13 +20,13 @@ struct FriendRequestInfo
 };
 
 // Friendship operations
-std::vector<FriendRequestInfo> getAllFriendRequests(const int receiver_id);
-std::vector<FriendInfo> getAllFriend(const int user_id);
-bool friendRequestExists(const int sender, const int receiver);
-bool addFriendRequest(const int sender, const int receiver);
-bool removeFriendRequest(const int sender, const int receiver);
-bool friendshipExists(const int user1, const int user2);
-bool addFriendship(const int user1, const int user2);
-bool removeFriendship(const int user1, const int user2);
+std::vector<FriendRequestInfo> get_all_friend_requests(sqlite3* db, const int receiver_id);
+std::vector<FriendInfo> get_all_friends(sqlite3* db, const int user_id);
+bool friend_request_exists(sqlite3* db, const int sender, const int receiver);
+bool add_friend_request(sqlite3* db, const int sender, const int receiver);
+bool remove_friend_request(sqlite3* db, const int sender, const int receiver);
+bool friendship_exists(sqlite3* db, const int user1, const int user2);
+bool add_friendship(sqlite3* db, const int user1, const int user2);
+bool remove_friendship(sqlite3* db, const int user1, const int user2);
 
 #endif // FRIEND_SERVICE_H
