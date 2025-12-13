@@ -1,4 +1,4 @@
-#include "db_manager.h"
+#include "account_service.h"
 #include <cstring>
 #include <ctime>
 #include <iostream>
@@ -6,7 +6,7 @@
 /**
  * Initialize database connection
  */
-sqlite3* db_init(const char* db_path)
+sqlite3* init_database(const char* db_path)
 {
     sqlite3* db;
     
@@ -27,7 +27,7 @@ sqlite3* db_init(const char* db_path)
 /**
  * Close database connection
  */
-void db_close(sqlite3* db)
+void close_database(sqlite3* db)
 {
     if (db)
     {
@@ -36,8 +36,7 @@ void db_close(sqlite3* db)
     }
 }
 
-int getUserIdByUsername(const std::string& username) {
-    sqlite3* db = db_init("database/chat.db");
+int get_user_id_by_username(sqlite3* db, const std::string& username) {
     const char *sql = "SELECT id FROM accounts WHERE username = ? LIMIT 1;";
     sqlite3_stmt *stmt;
     int userId = -1;
@@ -55,7 +54,6 @@ int getUserIdByUsername(const std::string& username) {
     }
 
     sqlite3_finalize(stmt);
-    db_close(db);
     return userId;   // -1 nếu không tìm thấy
 }
 
@@ -63,7 +61,7 @@ int getUserIdByUsername(const std::string& username) {
  * Register a new user
  * Returns: DB_SUCCESS, DB_USER_EXISTS, or DB_ERROR
  */
-int db_register_user(sqlite3* db, const std::string& username, const std::string& password, int* user_id)
+int register_user(sqlite3* db, const std::string& username, const std::string& password, int* user_id)
 {
     // Check if username already exists
     const char* check_sql = "SELECT id FROM accounts WHERE username = ?;";
@@ -122,7 +120,7 @@ int db_register_user(sqlite3* db, const std::string& username, const std::string
  * Verify login credentials
  * Returns: DB_SUCCESS, DB_USER_NOT_FOUND, DB_INVALID_PASSWORD, DB_USER_BANNED, or DB_ERROR
  */
-int db_verify_login(sqlite3* db, const std::string& username, const std::string& password, int* user_id)
+int verify_login(sqlite3* db, const std::string& username, const std::string& password, int* user_id)
 {
     const char* sql = "SELECT id, password, account_status FROM accounts WHERE username = ?;";
     sqlite3_stmt* stmt;
@@ -173,7 +171,7 @@ int db_verify_login(sqlite3* db, const std::string& username, const std::string&
  * Update user state (online/offline/away)
  * Returns: DB_SUCCESS or DB_ERROR
  */
-int db_update_user_state(sqlite3* db, int user_id, const std::string& state)
+int update_user_state(sqlite3* db, int user_id, const std::string& state)
 {
     const char* sql = "UPDATE accounts SET user_state = ? WHERE id = ?;";
     sqlite3_stmt* stmt;
@@ -204,7 +202,7 @@ int db_update_user_state(sqlite3* db, int user_id, const std::string& state)
  * Log user activity
  * Returns: DB_SUCCESS or DB_ERROR
  */
-int db_log_activity(sqlite3* db, int user_id, const std::string& action_type, const std::string& details)
+int log_activity(sqlite3* db, int user_id, const std::string& action_type, const std::string& details)
 {
     const char* sql = 
         "INSERT INTO activity_logs (user_id, action_type, details, timestamp) VALUES (?, ?, ?, ?);";

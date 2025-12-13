@@ -1,19 +1,19 @@
 #include "group_service.h"
-#include "db_manager.h" // Giả sử db_manager có các hàm cần thiết (ví dụ: g_db)
+#include "account_service.h"
 #include <iostream>
 
 // Lấy ID nhóm từ tên nhóm
-int getGroupIdByName(const std::string& group_name)
+int get_group_id_by_name(sqlite3* db, const std::string& group_name)
 {
     sqlite3_stmt *stmt;
     int group_id = -1;
 
     const char *sql = "SELECT group_id FROM groups WHERE group_name = ?;";
 
-    if (sqlite3_prepare_v2(g_db, sql, -1, &stmt, nullptr) != SQLITE_OK)
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
     {
-        std::cerr << "❌ Prepare failed (getGroupIdByName): "
-                  << sqlite3_errmsg(g_db) << std::endl;
+        std::cerr << "❌ Prepare failed (get_group_id_by_name): "
+                  << sqlite3_errmsg(db) << std::endl;
         return -1;
     }
 
@@ -25,8 +25,8 @@ int getGroupIdByName(const std::string& group_name)
     }
     else if (sqlite3_step(stmt) != SQLITE_DONE)
     {
-        std::cerr << "❌ Execution failed (getGroupIdByName): "
-                  << sqlite3_errmsg(g_db) << std::endl;
+        std::cerr << "❌ Execution failed (get_group_id_by_name): "
+                  << sqlite3_errmsg(db) << std::endl;
     }
 
     sqlite3_finalize(stmt);
@@ -34,17 +34,17 @@ int getGroupIdByName(const std::string& group_name)
 }
 
 // Kiểm tra xem người dùng có phải là chủ sở hữu nhóm không
-bool isGroupOwner(int group_id, int user_id)
+bool is_group_owner(sqlite3* db, int group_id, int user_id)
 {
     sqlite3_stmt *stmt;
     bool is_owner = false;
 
     const char *sql = "SELECT 1 FROM groups WHERE group_id = ? AND created_by = ?;";
 
-    if (sqlite3_prepare_v2(g_db, sql, -1, &stmt, nullptr) != SQLITE_OK)
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
     {
-        std::cerr << "❌ Prepare failed (isGroupOwner): "
-                  << sqlite3_errmsg(g_db) << std::endl;
+        std::cerr << "❌ Prepare failed (is_group_owner): "
+                  << sqlite3_errmsg(db) << std::endl;
         return false;
     }
 
@@ -60,17 +60,17 @@ bool isGroupOwner(int group_id, int user_id)
     return is_owner;
 }
 
-bool isGroupMember(int group_id, int user_id)
+bool is_group_member(sqlite3* db, int group_id, int user_id)
 {
     sqlite3_stmt *stmt;
     bool is_member = false;
 
     const char *sql = "SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?;";
 
-    if (sqlite3_prepare_v2(g_db, sql, -1, &stmt, nullptr) != SQLITE_OK)
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
     {
-        std::cerr << "❌ Prepare failed (isGroupMember): "
-                  << sqlite3_errmsg(g_db) << std::endl;
+        std::cerr << "❌ Prepare failed (is_group_member): "
+                  << sqlite3_errmsg(db) << std::endl;
         return false;
     }
 
@@ -87,7 +87,7 @@ bool isGroupMember(int group_id, int user_id)
 }
 
 // Hàm tạo nhóm mới và trả về group_id
-bool createGroup(const std::string& group_name, int creator_id)
+bool create_group(sqlite3* db, const std::string& group_name, int creator_id)
 {
     sqlite3_stmt *stmt;
 
@@ -96,10 +96,10 @@ bool createGroup(const std::string& group_name, int creator_id)
         INSERT INTO groups (group_name, created_by) VALUES (?, ?);
     )";
 
-    if (sqlite3_prepare_v2(g_db, sql_group, -1, &stmt, nullptr) != SQLITE_OK)
+    if (sqlite3_prepare_v2(db, sql_group, -1, &stmt, nullptr) != SQLITE_OK)
     {
-        std::cerr << "❌ Prepare failed (createGroup - group): "
-                  << sqlite3_errmsg(g_db) << std::endl;
+        std::cerr << "❌ Prepare failed (create_group - group): "
+                  << sqlite3_errmsg(db) << std::endl;
         return -1;
     }
 
@@ -108,8 +108,8 @@ bool createGroup(const std::string& group_name, int creator_id)
 
     if (sqlite3_step(stmt) != SQLITE_DONE)
     {
-        std::cerr << "❌ Execution failed (createGroup - group): "
-                  << sqlite3_errmsg(g_db) << std::endl;
+        std::cerr << "❌ Execution failed (create_group - group): "
+                  << sqlite3_errmsg(db) << std::endl;
         sqlite3_finalize(stmt);
         return false;
     }
@@ -119,8 +119,8 @@ bool createGroup(const std::string& group_name, int creator_id)
     std::cout << "✅ Group created: " << group_name << std::endl;
 
     // 2. Thêm người tạo vào nhóm với quyền admin
-    int group_id = sqlite3_last_insert_rowid(g_db);
-    if (!addGroupMember(group_id, creator_id))
+    int group_id = sqlite3_last_insert_rowid(db);
+    if (!add_group_member(db, group_id, creator_id))
     {
         std::cerr << "❌ Failed to add creator to group: " << creator_id << " to " << group_id << std::endl;
         return false;
@@ -130,7 +130,7 @@ bool createGroup(const std::string& group_name, int creator_id)
 }
 
 // Hàm thêm thành viên vào nhóm
-bool addGroupMember(int group_id, int user_id)
+bool add_group_member(sqlite3* db, int group_id, int user_id)
 {
     sqlite3_stmt *stmt;
 
@@ -139,10 +139,10 @@ bool addGroupMember(int group_id, int user_id)
         VALUES (?, ?);
     )";
 
-    if (sqlite3_prepare_v2(g_db, sql, -1, &stmt, nullptr) != SQLITE_OK)
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
     {
-        std::cerr << "❌ Prepare failed (addGroupMember): "
-                  << sqlite3_errmsg(g_db) << std::endl;
+        std::cerr << "❌ Prepare failed (add_group_member): "
+                  << sqlite3_errmsg(db) << std::endl;
         return false;
     }
 
@@ -151,8 +151,8 @@ bool addGroupMember(int group_id, int user_id)
 
     if (sqlite3_step(stmt) != SQLITE_DONE)
     {
-        std::cerr << "❌ Execution failed (addGroupMember): "
-                  << sqlite3_errmsg(g_db) << std::endl;
+        std::cerr << "❌ Execution failed (add_group_member): "
+                  << sqlite3_errmsg(db) << std::endl;
         sqlite3_finalize(stmt);
         return false;
     }
@@ -162,16 +162,16 @@ bool addGroupMember(int group_id, int user_id)
     return true;
 }
 
-bool removeGroupMember(int group_id, int user_id)
+bool remove_group_member(sqlite3* db, int group_id, int user_id)
 {
     sqlite3_stmt *stmt;
 
     const char *sql = "DELETE FROM group_members WHERE group_id = ? AND user_id = ?;";
 
-    if (sqlite3_prepare_v2(g_db, sql, -1, &stmt, nullptr) != SQLITE_OK)
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
     {
-        std::cerr << "❌ Prepare failed (removeGroupMember): "
-                  << sqlite3_errmsg(g_db) << std::endl;
+        std::cerr << "❌ Prepare failed (remove_group_member): "
+                  << sqlite3_errmsg(db) << std::endl;
         return false;
     }
 
@@ -182,7 +182,7 @@ bool removeGroupMember(int group_id, int user_id)
 
     if (sqlite3_step(stmt) == SQLITE_DONE)
     {
-        if (sqlite3_changes(g_db) > 0)
+        if (sqlite3_changes(db) > 0)
         {
             std::cout << "✅ User " << user_id << " removed from group " << group_id << std::endl;
             success = true;
@@ -195,38 +195,38 @@ bool removeGroupMember(int group_id, int user_id)
     }
     else
     {
-        std::cerr << "❌ Delete failed (removeGroupMember): "
-                  << sqlite3_errmsg(g_db) << std::endl;
+        std::cerr << "❌ Delete failed (remove_group_member): "
+                  << sqlite3_errmsg(db) << std::endl;
     }
 
     sqlite3_finalize(stmt);
     return success;
 }
 
-bool deleteGroup(int group_id)
+bool delete_group(sqlite3* db, int group_id)
 {
     sqlite3_stmt *stmt_group;
 
     // 2. Xóa nhóm khỏi bảng groups
     const char *sql_group = "DELETE FROM groups WHERE group_id = ?;";
     
-    if (sqlite3_prepare_v2(g_db, sql_group, -1, &stmt_group, nullptr) != SQLITE_OK)
+    if (sqlite3_prepare_v2(db, sql_group, -1, &stmt_group, nullptr) != SQLITE_OK)
     {
-        std::cerr << "❌ Prepare failed (deleteGroup - group): " << sqlite3_errmsg(g_db) << std::endl;
+        std::cerr << "❌ Prepare failed (delete_group - group): " << sqlite3_errmsg(db) << std::endl;
         return false;
     }
 
     sqlite3_bind_int(stmt_group, 1, group_id);
     if (sqlite3_step(stmt_group) == SQLITE_DONE)
     {
-        if (sqlite3_changes(g_db) > 0)
+        if (sqlite3_changes(db) > 0)
         {
             std::cout << "✅ Group deleted: " << group_id << std::endl;
         }
     }
     else
     {
-        std::cerr << "❌ Execution failed (deleteGroup - group): " << sqlite3_errmsg(g_db) << std::endl;
+        std::cerr << "❌ Execution failed (delete_group - group): " << sqlite3_errmsg(db) << std::endl;
     }
 
     sqlite3_finalize(stmt_group);

@@ -5,6 +5,8 @@ init_db
 reset-db
 test_*
 .vscode
+chat.db
+
 
 # Build artifacts
 *.o

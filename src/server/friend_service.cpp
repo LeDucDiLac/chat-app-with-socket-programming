@@ -1,8 +1,8 @@
 #include "friend_service.h"
-#include "db_manager.h" // Assuming db_manager handles database queries
+#include "account_service.h"
 #include <iostream>
 
-std::vector<FriendRequestInfo> getAllFriendRequests(const int receiver_id)
+std::vector<FriendRequestInfo> get_all_friend_requests(sqlite3* db, const int receiver_id)
 {
   std::vector<FriendRequestInfo> requests;
   sqlite3_stmt *stmt;
@@ -18,10 +18,10 @@ std::vector<FriendRequestInfo> getAllFriendRequests(const int receiver_id)
         ORDER BY fr.timestamp DESC
     )";
 
-  if (sqlite3_prepare_v2(g_db, sql, -1, &stmt, nullptr) != SQLITE_OK)
+  if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
   {
-    std::cerr << "❌ Prepare failed (getAllFriendRequests): "
-              << sqlite3_errmsg(g_db) << std::endl;
+    std::cerr << "❌ Prepare failed (get_all_friend_requests): "
+              << sqlite3_errmsg(db) << std::endl;
     return requests;
   }
 
@@ -45,7 +45,7 @@ std::vector<FriendRequestInfo> getAllFriendRequests(const int receiver_id)
   return requests;
 }
 
-bool friendRequestExists(const int sender, const int receiver)
+bool friend_request_exists(sqlite3* db, const int sender, const int receiver)
 {
   const char *sql =
       "SELECT 1 FROM friend_requests "
@@ -56,10 +56,10 @@ bool friendRequestExists(const int sender, const int receiver)
   bool exists = false;
 
   // Prepare statement
-  if (sqlite3_prepare_v2(g_db, sql, -1, &stmt, nullptr) != SQLITE_OK)
+  if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
   {
     std::cerr << "Failed to prepare statement: "
-              << sqlite3_errmsg(g_db) << std::endl;
+              << sqlite3_errmsg(db) << std::endl;
     return false;
   }
 
@@ -78,7 +78,7 @@ bool friendRequestExists(const int sender, const int receiver)
   return exists;
 }
 
-bool addFriendRequest(const int sender, const int receiver)
+bool add_friend_request(sqlite3* db, const int sender, const int receiver)
 {
   const char *sql =
       "INSERT INTO friend_requests (sender_id, receiver_id) "
@@ -86,9 +86,9 @@ bool addFriendRequest(const int sender, const int receiver)
 
   sqlite3_stmt *stmt;
 
-  if (sqlite3_prepare_v2(g_db, sql, -1, &stmt, nullptr) != SQLITE_OK)
+  if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
   {
-    std::cerr << "Prepare failed: " << sqlite3_errmsg(g_db) << std::endl;
+    std::cerr << "Prepare failed: " << sqlite3_errmsg(db) << std::endl;
     return false;
   }
 
@@ -99,7 +99,7 @@ bool addFriendRequest(const int sender, const int receiver)
 
   if (rc != SQLITE_DONE)
   {
-    std::cerr << "Execution failed: " << sqlite3_errmsg(g_db) << std::endl;
+    std::cerr << "Execution failed: " << sqlite3_errmsg(db) << std::endl;
     sqlite3_finalize(stmt);
     return false;
   }
@@ -109,7 +109,7 @@ bool addFriendRequest(const int sender, const int receiver)
   return true;
 }
 
-bool removeFriendRequest(const int sender, const int receiver)
+bool remove_friend_request(sqlite3* db, const int sender, const int receiver)
 {
   sqlite3_stmt *stmt;
 
@@ -117,9 +117,9 @@ bool removeFriendRequest(const int sender, const int receiver)
       "DELETE FROM friend_requests "
       "WHERE sender_id = ? AND receiver_id = ?";
 
-  if (sqlite3_prepare_v2(g_db, sql, -1, &stmt, nullptr) != SQLITE_OK)
+  if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
   {
-    std::cerr << "❌ Prepare failed: " << sqlite3_errmsg(g_db) << std::endl;
+    std::cerr << "❌ Prepare failed: " << sqlite3_errmsg(db) << std::endl;
     return false;
   }
 
@@ -130,7 +130,7 @@ bool removeFriendRequest(const int sender, const int receiver)
 
   if (sqlite3_step(stmt) == SQLITE_DONE)
   {
-    if (sqlite3_changes(g_db) > 0)
+    if (sqlite3_changes(db) > 0)
     {
       std::cout << "✅ Friend request removed: "
                 << sender << " -> " << receiver << std::endl;
@@ -144,14 +144,14 @@ bool removeFriendRequest(const int sender, const int receiver)
   }
   else
   {
-    std::cerr << "❌ Delete failed: " << sqlite3_errmsg(g_db) << std::endl;
+    std::cerr << "❌ Delete failed: " << sqlite3_errmsg(db) << std::endl;
   }
 
   sqlite3_finalize(stmt);
   return success;
 }
 
-bool friendshipExists(int user1, int user2)
+bool friendship_exists(sqlite3* db, int user1, int user2)
 {
   sqlite3_stmt *stmt;
 
@@ -164,10 +164,9 @@ bool friendshipExists(int user1, int user2)
             (user_id1 = ? AND user_id2 = ?);
     )";
 
-  if (sqlite3_prepare_v2(g_db, sql, -1, &stmt, NULL) != SQLITE_OK)
+  if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) != SQLITE_OK)
   {
     std::cerr << "Failed to prepare statement\n";
-    sqlite3_close(g_db);
     return false;
   }
 
@@ -188,7 +187,7 @@ bool friendshipExists(int user1, int user2)
   return exists;
 }
 
-bool addFriendship(const int user1, const int user2)
+bool add_friendship(sqlite3* db, const int user1, const int user2)
 {
   // luôn lưu theo thứ tự tăng dần tránh trùng lặp
   int u1 = std::min(user1, user2);
@@ -201,9 +200,9 @@ bool addFriendship(const int user1, const int user2)
 
   sqlite3_stmt *stmt;
 
-  if (sqlite3_prepare_v2(g_db, sql, -1, &stmt, nullptr) != SQLITE_OK)
+  if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
   {
-    std::cerr << "[ERROR] Prepare failed: " << sqlite3_errmsg(g_db) << std::endl;
+    std::cerr << "[ERROR] Prepare failed: " << sqlite3_errmsg(db) << std::endl;
     return false;
   }
 
@@ -214,7 +213,7 @@ bool addFriendship(const int user1, const int user2)
 
   if (rc != SQLITE_DONE)
   {
-    std::cerr << "[ERROR] Insert failed: " << sqlite3_errmsg(g_db) << std::endl;
+    std::cerr << "[ERROR] Insert failed: " << sqlite3_errmsg(db) << std::endl;
     sqlite3_finalize(stmt);
     return false;
   }
@@ -227,7 +226,7 @@ bool addFriendship(const int user1, const int user2)
   return true;
 }
 
-bool removeFriendship(const int user1, const int user2)
+bool remove_friendship(sqlite3* db, const int user1, const int user2)
 {
   sqlite3_stmt *stmt;
 
@@ -236,10 +235,10 @@ bool removeFriendship(const int user1, const int user2)
       "WHERE (user_id1 = ? AND user_id2 = ?) "
       "   OR (user_id1 = ? AND user_id2 = ?)";
 
-  if (sqlite3_prepare_v2(g_db, sql, -1, &stmt, nullptr) != SQLITE_OK)
+  if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
   {
-    std::cerr << "❌ Prepare failed (removeFriendship): "
-              << sqlite3_errmsg(g_db) << std::endl;
+    std::cerr << "❌ Prepare failed (remove_friendship): "
+              << sqlite3_errmsg(db) << std::endl;
     return false;
   }
 
@@ -253,7 +252,7 @@ bool removeFriendship(const int user1, const int user2)
 
   if (sqlite3_step(stmt) == SQLITE_DONE)
   {
-    if (sqlite3_changes(g_db) > 0)
+    if (sqlite3_changes(db) > 0)
     {
       std::cout << "✅ Friendship removed between "
                 << user1 << " and " << user2 << std::endl;
@@ -267,15 +266,15 @@ bool removeFriendship(const int user1, const int user2)
   }
   else
   {
-    std::cerr << "❌ Delete failed (removeFriendship): "
-              << sqlite3_errmsg(g_db) << std::endl;
+    std::cerr << "❌ Delete failed (remove_friendship): "
+              << sqlite3_errmsg(db) << std::endl;
   }
 
   sqlite3_finalize(stmt);
   return success;
 }
 
-std::vector<FriendInfo> getAllFriend(const int user_id)
+std::vector<FriendInfo> get_all_friends(sqlite3* db, const int user_id)
 {
   std::vector<FriendInfo> friends;
   sqlite3_stmt *stmt;
@@ -291,10 +290,10 @@ std::vector<FriendInfo> getAllFriend(const int user_id)
         )
     )";
 
-  if (sqlite3_prepare_v2(g_db, sql, -1, &stmt, nullptr) != SQLITE_OK)
+  if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
   {
-    std::cerr << "❌ Prepare failed (getAllFriend): "
-              << sqlite3_errmsg(g_db) << std::endl;
+    std::cerr << "❌ Prepare failed (get_all_friends): "
+              << sqlite3_errmsg(db) << std::endl;
     return friends;
   }
 

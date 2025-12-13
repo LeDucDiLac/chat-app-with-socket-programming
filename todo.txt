@@ -6,3 +6,5 @@ hieu:
   xoa cot status cua friend request
   addfriend khong sua db
   duc qua dan, sua lai db
+  sửa lại tên api từ camel case thành snake case
+  thêm biến sqlite* db vào tất cả hàm api, không dùng global
