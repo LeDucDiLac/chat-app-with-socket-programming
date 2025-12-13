@@ -5,3 +5,4 @@ duc:
 hieu:
   xoa cot status cua friend request
   addfriend khong sua db
+  duc qua dan, sua lai db

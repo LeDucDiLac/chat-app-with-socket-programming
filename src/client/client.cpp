@@ -293,7 +293,7 @@ void handle_friends_menu()
     switch (choice)
     {
     case 1:
-        request["type"] = 3000;
+        request["type"] = 1300;
         request["data"] = json::object();
         send_request(request);
         break;
@@ -301,7 +301,7 @@ void handle_friends_menu()
     case 2: // Send Friend Request
         std::cout << "Target username: ";
         std::getline(std::cin, input);
-        request["type"] = 3001;
+        request["type"] = 1301;
         request["data"]["target_username"] = input;
         send_request(request);
         break;
@@ -309,7 +309,7 @@ void handle_friends_menu()
     case 3: // Accept Friend Request
         std::cout << "Target username: ";
         std::getline(std::cin, input);
-        request["type"] = 3002;
+        request["type"] = 1302;
         request["data"]["target_username"] = input;
         send_request(request);
         break;
@@ -317,7 +317,7 @@ void handle_friends_menu()
     case 4: // Reject Friend Request
         std::cout << "Target username: ";
         std::getline(std::cin, input);
-        request["type"] = 3003;
+        request["type"] = 1303;
         request["data"]["target_username"] = input;
         send_request(request);
         break;
@@ -325,13 +325,13 @@ void handle_friends_menu()
     case 5: // Unfriend
         std::cout << "Friend username: ";
         std::getline(std::cin, input);
-        request["type"] = 3004;
+        request["type"] = 1304;
         request["data"]["target_username"] = input;
         send_request(request);
         break;
 
     case 6: // Get Friend List
-        request["type"] = 3005;
+        request["type"] = 1305;
         request["data"] = json::object();
         send_request(request);
         break;
@@ -369,79 +369,46 @@ void handle_group_menu()
     case 1: // Create Group
         std::cout << "Group name: ";
         std::getline(std::cin, input);
-        request["type"] = 1010;
+        request["type"] = 1400;
         request["data"]["group_name"] = input;
         send_request(request);
         break;
 
     case 2: // Add to Group
     {
-        int group_id, user_id;
-        std::cout << "Group ID: ";
-        if (!(std::cin >> group_id))
-        {
-            std::cin.clear();
-            std::cin.ignore(10000, '\n');
-            std::cout << "Invalid input\n";
-            return;
-        }
-        std::cout << "User ID: ";
-        if (!(std::cin >> user_id))
-        {
-            std::cin.clear();
-            std::cin.ignore(10000, '\n');
-            std::cout << "Invalid input\n";
-            return;
-        }
-        std::cin.ignore(10000, '\n');
-        request["type"] = 1011;
-        request["data"]["group_id"] = group_id;
-        request["data"]["user_id"] = user_id;
+        std::string group_name, username;
+        std::cout << "Group's name: ";
+        std::getline(std::cin, group_name);
+        std::cout << "Username: ";
+        std::getline(std::cin, username);
+        request["type"] = 1401;
+        request["data"]["group_name"] = group_name;
+        request["data"]["target_username"] = username;
         send_request(request);
         break;
     }
 
     case 3: // Remove from Group
     {
-        int group_id, user_id;
-        std::cout << "Group ID: ";
-        if (!(std::cin >> group_id))
-        {
-            std::cin.clear();
-            std::cin.ignore(10000, '\n');
-            std::cout << "Invalid input\n";
-            return;
-        }
-        std::cout << "User ID: ";
-        if (!(std::cin >> user_id))
-        {
-            std::cin.clear();
-            std::cin.ignore(10000, '\n');
-            std::cout << "Invalid input\n";
-            return;
-        }
-        std::cin.ignore(10000, '\n');
-        request["type"] = 1012;
-        request["data"]["group_id"] = group_id;
-        request["data"]["user_id"] = user_id;
+        std::string group_name, username;
+        std::cout << "Group's name: ";
+        std::getline(std::cin, group_name);
+        std::cout << "Username: ";
+        std::getline(std::cin, username);
+        request["type"] = 1402;
+        request["data"]["group_name"] = group_name;
+        request["data"]["target_username"] = username;
         send_request(request);
         break;
     }
 
     case 4: // Leave Group
     {
-        int group_id;
-        std::cout << "Group ID: ";
-        if (!(std::cin >> group_id))
-        {
-            std::cin.clear();
-            std::cin.ignore(10000, '\n');
-            std::cout << "Invalid input\n";
-            return;
-        }
-        std::cin.ignore(10000, '\n');
-        request["type"] = 1013;
-        request["data"]["group_id"] = group_id;
+        std::string group_name;
+        std::cout << "Group's name: ";
+        std::getline(std::cin, group_name);
+        request["type"] = 1403;
+        request["data"]["group_name"] = group_name;
         send_request(request);
         break;
     }

@@ -10,6 +10,7 @@ LIBS_DIR = libs
 SERVER_DIR = src/server
 CLIENT_DIR = src/client
 UTILS_DIR = src/utils
+DATABASE_DIR = database
 
 # Source files
 SERVER_SRC = $(SERVER_DIR)/server.cpp
@@ -17,6 +18,8 @@ CLIENT_SRC = $(CLIENT_DIR)/client.cpp
 PROTOCOL_SRC = $(UTILS_DIR)/protocol.cpp
 DB_MANAGER_SRC = $(SERVER_DIR)/db_manager.cpp
 FRIEND_SERVICE = $(SERVER_DIR)/friend_service.cpp
+GROUP_SERVICE = $(SERVER_DIR)/group_service.cpp
+DATABASE_RESET = $(DATABASE_DIR)/reset_db.cpp # Vẫn giữ khai báo này
 
 TEST_SRC= $(SERVER_DIR)/test.c
 TEST_JSON_SRC= $(SERVER_DIR)/test_json.cpp
@@ -32,8 +35,8 @@ CLIENT_BIN = client
 all: server client
 
 # Build server
-server: $(SERVER_SRC) $(PROTOCOL_SRC) $(DB_MANAGER_SRC) $(FRIEND_SERVICE)
-	$(CXX) $(CXXFLAGS) -pthread $(SERVER_SRC) $(PROTOCOL_SRC) $(DB_MANAGER_SRC) $(FRIEND_SERVICE) -o $(SERVER_BIN) $(LDFLAGS_SQLITE)
+server: $(SERVER_SRC) $(PROTOCOL_SRC) $(DB_MANAGER_SRC) $(FRIEND_SERVICE) $(GROUP_SERVICE)
+	$(CXX) $(CXXFLAGS) -pthread $(SERVER_SRC) $(PROTOCOL_SRC) $(DB_MANAGER_SRC) $(FRIEND_SERVICE) $(GROUP_SERVICE) -o $(SERVER_BIN) $(LDFLAGS_SQLITE)
 
 # Build client
 client: $(CLIENT_SRC) $(PROTOCOL_SRC)
@@ -43,6 +46,7 @@ client: $(CLIENT_SRC) $(PROTOCOL_SRC)
 clean:
 	rm -f $(SERVER_BIN) $(CLIENT_BIN) test test_json test_protocol test_pipelined init_db
 	rm -f $(SERVER_DIR)/*.o $(CLIENT_DIR)/*.o
+	rm -f reset-db reset-db.* # Cập nhật: thêm lệnh xóa reset-db
 
 # Clean and rebuild
 rebuild: clean all
@@ -70,4 +74,16 @@ run-server: server
 run-client: client
 	./$(CLIENT_BIN) 127.0.0.1 5550
 
-.PHONY: all server client clean rebuild run-server run-client test test-json test-protocol test-pipelined init-db
+# =======================================================
+# LỆNH BIÊN DỊCH VÀ CHẠY reset_db.cpp
+# =======================================================
+
+# Luật biên dịch tường minh cho reset_db.cpp (Không bắt buộc nếu chỉ có 1 file)
+# $(DATABASE_DIR)/reset_db.o: $(DATABASE_RESET)
+# 	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+# Target để biên dịch và liên kết (tạo executable)
+reset-db: $(DATABASE_RESET)
+	$(CXX) $(CXXFLAGS) -o reset-db $(DATABASE_RESET) $(LDFLAGS_SQLITE)
+
+.PHONY: all server client clean rebuild run-server run-client test test-json test-protocol test-pipelined init-db reset-db # Thêm reset-db vào .PHONY
