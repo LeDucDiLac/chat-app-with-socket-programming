@@ -7,7 +7,6 @@
 #include <cstdint>
 #include "friend_service.h"
 
-extern sqlite3 *g_db;
 
 // Message structure matching database schema
 struct Message {
@@ -24,9 +23,8 @@ struct Message {
     std::string group_name;       // empty if direct message
     
     std::string content;
-    int64_t timestamp;            // Unix timestamp
+    std::string timestamp;            // Unix timestamp
     bool is_read;
-    bool is_offline;
 };
 
 // Conversation info (for listing active chats)
@@ -49,6 +47,8 @@ struct Conversation {
 #define DB_GROUP_NOT_FOUND -5
 #define DB_MESSAGE_NOT_FOUND -6
 #define DB_PERMISSION_DENIED -7
+#define DB_RECEIVER_BLOCKED -8
+
 
 /**
  * Send a direct message from one user to another
@@ -57,15 +57,12 @@ struct Conversation {
  * @param sender_id ID of the user sending the message
  * @param receiver_id ID of the user receiving the message
  * @param content Text content of the message
- * @param is_offline Whether the receiver is offline (message will be queued)
  * 
  * @return DB_SUCCESS on success
- *         DB_NOT_FRIENDS_TO_SEND if sender and receiver are not friends
- *         DB_USERNAME_NOT_EXIST if sender or receiver doesn't exist
  *         DB_ERROR on database error
  */
 int send_direct_message(sqlite3* db, int sender_id, int receiver_id, 
-                       const std::string& content, bool is_offline);
+                       const std::string& content);
 
 /**
  * Retrieve message history between two users
@@ -74,18 +71,18 @@ int send_direct_message(sqlite3* db, int sender_id, int receiver_id,
  * @param user_id1 ID of first user in conversation
  * @param user_id2 ID of second user in conversation
  * @param messages Output vector to store retrieved messages (sorted by timestamp ascending)
- * @param limit Maximum number of messages to retrieve (default: 50)
+ * @param limit Maximum number of messages to retrieve (default: 10)
  * @param offset Number of messages to skip for pagination (default: 0)
  * 
  * @return DB_SUCCESS on success
  *         DB_ERROR on database error
  * 
  * @note Messages are returned in chronological order (oldest first)
- * @note Use limit and offset for pagination (e.g., limit=50, offset=0 for first page)
+ * @note Use limit and offset for pagination (e.g., limit=10, offset=0 for first page)
  */
 int get_direct_message_history(sqlite3* db, int user_id1, int user_id2, 
                                std::vector<Message>& messages, 
-                               int limit = 50, int offset = 0);
+                               int limit = 10, int offset = 0);
 
 /**
  * Send a message to a group chat
@@ -109,7 +106,7 @@ int send_group_message(sqlite3* db, int sender_id, int group_id,
  * @param db Database connection handle
  * @param group_id ID of the group
  * @param messages Output vector to store retrieved messages (sorted by timestamp ascending)
- * @param limit Maximum number of messages to retrieve (default: 50)
+ * @param limit Maximum number of messages to retrieve (default: 10)
  * @param offset Number of messages to skip for pagination (default: 0)
  * 
  * @return DB_SUCCESS on success
@@ -120,7 +117,7 @@ int send_group_message(sqlite3* db, int sender_id, int group_id,
  */
 int get_group_message_history(sqlite3* db, int group_id, 
                               std::vector<Message>& messages,
-                              int limit = 50, int offset = 0);
+                              int limit = 10, int offset = 0);
 
 /**
  * Retrieve all offline messages for a user (messages received while offline)
@@ -185,19 +182,6 @@ int mark_group_messages_read(sqlite3* db, int user_id, int group_id);
 int get_active_conversations(sqlite3* db, int user_id, 
                              std::vector<Conversation>& conversations);
 
-/**
- * Check if two users are friends
- * 
- * @param db Database connection handle
- * @param user_id1 ID of first user
- * @param user_id2 ID of second user
- * 
- * @return true if users are friends (friendship exists in friend_lists table)
- *         false otherwise
- * 
- * @note Friendship is bidirectional - checks both (id1, id2) and (id2, id1)
- */
-bool are_friends(sqlite3* db, int user_id1, int user_id2);
 
 /**
  * Check if a user is a member of a group

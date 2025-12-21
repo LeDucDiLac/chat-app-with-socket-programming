@@ -9,7 +9,7 @@ test_auth
 test_complete
 test_groups
 test_friends
-
+*.sql
 
 
 # Build artifacts

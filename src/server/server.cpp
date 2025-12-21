@@ -14,6 +14,7 @@
 
 #include "friend_service.h"
 #include "group_service.h"
+#include "chat_service.h"
 
 using json = nlohmann::json;
 
@@ -54,6 +55,8 @@ void handle_get_group_list(int client_sock, const json &request);
 void handle_leave_group(int client_sock, const json &request);
 void handle_get_offline_messages(int client_sock, const json &request);
 void handle_get_group_messages(int client_sock, const json &request);
+
+void handle_get_message_history(int client_sock, const json& request);
 
 // Helper function to find session by socket
 Session *find_session_by_socket(int socket_fd)
@@ -475,14 +478,103 @@ void handle_logout(int client_sock, const json &request)
 
 void handle_send_message(int client_sock, const json &request)
 {
-    // TODO: Implement send message
-    // - Check if receiver exists
-    // - Store message in database
-    // - If receiver online, push notification
-    // - If offline, mark as offline message
+    Session* session = find_session_by_socket(client_sock);
+    if (!session) {
+        send_response(client_sock, 401, "You are not logged in");
+        return;
+    }
 
-    std::cout << "[PLACEHOLDER] SEND_MESSAGE called" << std::endl;
-    send_response(client_sock, 200, "Send message feature not implemented yet");
+    if (!request.contains("data") || !request["data"].contains("receiver_id") || !request["data"].contains("content")) {
+        send_response(client_sock, 400, "Missing receiver_id or content");
+        return;
+    }
+
+    int sender_id = session->user_id;
+    int receiver_id = request["data"]["receiver_id"];
+    std::string content = request["data"]["content"];
+
+    int result = send_direct_message(g_db, sender_id, receiver_id, content);
+
+    if (result == DB_SUCCESS) {
+        send_response(client_sock, 200, "Message sent successfully");
+
+        // Check if receiver is online
+        int receiver_sock = -1;
+        pthread_mutex_lock(&sessions_mutex);
+        for (const auto& s : active_sessions) {
+            if (s.user_id == receiver_id) {
+                receiver_sock = s.socket_fd;
+                break;
+            }
+        }
+        pthread_mutex_unlock(&sessions_mutex);
+
+        if (receiver_sock != -1) {
+            // Send push notification
+            json notification = {
+                {"type", 2001},
+                {"data", {
+                    {"sender_id", sender_id},
+                    {"sender_username", session->username},
+                    {"content", content},
+                    {"timestamp", std::to_string(std::time(nullptr))}
+                }}
+            };
+            std::string notif_str = notification.dump();
+            send_json_packet(receiver_sock, notif_str.c_str());
+        }
+    } else if (result == DB_NOT_FRIENDS_TO_SEND) {
+        send_response(client_sock, 403, "You are not friends with this user");
+    } else {
+        send_response(client_sock, 500, "Failed to send message");
+    }
+}
+
+void handle_get_message_history(int client_sock, const json& request)
+{
+    Session* session = find_session_by_socket(client_sock);
+    if (!session) {
+        send_response(client_sock, 401, "You are not logged in");
+        return;
+    }
+
+    if (!request.contains("data") || !request["data"].contains("target_id")) {
+        send_response(client_sock, 400, "Missing target_id");
+        return;
+    }
+
+    int user_id1 = session->user_id;
+    int user_id2 = request["data"]["target_id"];
+    int limit = request["data"]["limit"];
+    int offset = request["data"].value("offset", 0);
+
+    std::vector<Message> messages;
+    int result = get_direct_message_history(g_db, user_id1, user_id2, messages, limit, offset);
+
+    if (result == DB_SUCCESS) {
+        json response;
+        response["type"] = 2005; // MESSAGE_HISTORY
+        response["data"]["messages"] = json::array();
+        
+        // Mark messages as read
+        mark_messages_read(g_db, user_id1, user_id2);
+
+        for (const auto& msg : messages) {
+            response["data"]["messages"].push_back({
+                {"id", msg.message_id},
+                {"sender_id", msg.sender_id},
+                {"content", msg.content},
+                {"timestamp", msg.timestamp},
+                {"is_read", msg.is_read}
+            });
+        }
+        std::string response_str = response.dump();
+        send_json_packet(client_sock, response_str.c_str());
+    } else if (result == DB_NOT_FRIENDS_TO_SEND) {
+        send_response(client_sock, 403, "You are not friends with this user");
+    } else {
+        send_response(client_sock, 500, "Failed to retrieve messages");
+    }
 }
 
 void handle_send_group_message(int client_sock, const json &request)

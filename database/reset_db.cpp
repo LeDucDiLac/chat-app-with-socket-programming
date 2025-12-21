@@ -97,10 +97,8 @@ void create_tables(sqlite3 *db)
                 "    content TEXT NOT NULL,"
                 "    timestamp INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP,"
                 "    is_read INTEGER DEFAULT 0 CHECK(is_read IN (0, 1)),"
-                "    is_offline INTEGER DEFAULT 0 CHECK(is_offline IN (0, 1)),"
                 "    FOREIGN KEY(sender_id) REFERENCES accounts(id) ON DELETE CASCADE,"
-                "    FOREIGN KEY(receiver_id) REFERENCES accounts(id) ON DELETE CASCADE,"
-                "    CHECK(sender_id != receiver_id)"
+                "    FOREIGN KEY(receiver_id) REFERENCES accounts(id) ON DELETE CASCADE"
                 ");",
                 "direct_messages table created");
 
@@ -211,15 +209,15 @@ void seed_data(sqlite3 *db)
 
     // Insert direct messages
     std::string insert_direct_messages =
-        "INSERT OR IGNORE INTO direct_messages (sender_id, receiver_id, content, timestamp, is_read, is_offline) VALUES "
+        "INSERT OR IGNORE INTO direct_messages (sender_id, receiver_id, content, timestamp, is_read) VALUES "
         "(1, 2, 'Hey Bob, how are you?', " +
-        std::to_string(week_ago) + ", 1, 0),"
+        std::to_string(week_ago) + ", 1),"
                                    "(2, 1, 'I''m good Alice, thanks!', " +
-        std::to_string(week_ago) + ", 1, 0),"
+        std::to_string(week_ago) + ", 1),"
                                    "(3, 1, 'Hi Alice!', " +
-        std::to_string(day_ago) + ", 0, 1)," // offline message
+        std::to_string(day_ago) + ", 0),"
                                   "(4, 1, 'Can we talk later?', " +
-        std::to_string(day_ago) + ", 0, 1);"; // offline message
+        std::to_string(day_ago) + ", 0);";
     execute_sql(db, insert_direct_messages.c_str(), "direct_messages seeded");
 
     // Insert group messages
