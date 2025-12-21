@@ -3,7 +3,7 @@
 #include <iostream>
 
 // Lấy ID nhóm từ tên nhóm
-int get_group_id_by_name(sqlite3* db, const std::string& group_name)
+int get_group_id_by_name(sqlite3 *db, const std::string &group_name)
 {
     sqlite3_stmt *stmt;
     int group_id = -1;
@@ -34,7 +34,7 @@ int get_group_id_by_name(sqlite3* db, const std::string& group_name)
 }
 
 // Kiểm tra xem người dùng có phải là chủ sở hữu nhóm không
-bool is_group_owner(sqlite3* db, int group_id, int user_id)
+bool is_group_owner(sqlite3 *db, int group_id, int user_id)
 {
     sqlite3_stmt *stmt;
     bool is_owner = false;
@@ -60,7 +60,7 @@ bool is_group_owner(sqlite3* db, int group_id, int user_id)
     return is_owner;
 }
 
-bool is_group_member(sqlite3* db, int group_id, int user_id)
+bool is_group_member(sqlite3 *db, int group_id, int user_id)
 {
     sqlite3_stmt *stmt;
     bool is_member = false;
@@ -87,7 +87,7 @@ bool is_group_member(sqlite3* db, int group_id, int user_id)
 }
 
 // Hàm tạo nhóm mới và trả về group_id
-bool create_group(sqlite3* db, const std::string& group_name, int creator_id)
+bool create_group(sqlite3 *db, const std::string &group_name, int creator_id)
 {
     sqlite3_stmt *stmt;
 
@@ -125,12 +125,12 @@ bool create_group(sqlite3* db, const std::string& group_name, int creator_id)
         std::cerr << "❌ Failed to add creator to group: " << creator_id << " to " << group_id << std::endl;
         return false;
     }
-    
+
     return true;
 }
 
 // Hàm thêm thành viên vào nhóm
-bool add_group_member(sqlite3* db, int group_id, int user_id)
+bool add_group_member(sqlite3 *db, int group_id, int user_id)
 {
     sqlite3_stmt *stmt;
 
@@ -162,7 +162,7 @@ bool add_group_member(sqlite3* db, int group_id, int user_id)
     return true;
 }
 
-bool remove_group_member(sqlite3* db, int group_id, int user_id)
+bool remove_group_member(sqlite3 *db, int group_id, int user_id)
 {
     sqlite3_stmt *stmt;
 
@@ -203,13 +203,13 @@ bool remove_group_member(sqlite3* db, int group_id, int user_id)
     return success;
 }
 
-bool delete_group(sqlite3* db, int group_id)
+bool delete_group(sqlite3 *db, int group_id)
 {
     sqlite3_stmt *stmt_group;
 
     // 2. Xóa nhóm khỏi bảng groups
     const char *sql_group = "DELETE FROM groups WHERE group_id = ?;";
-    
+
     if (sqlite3_prepare_v2(db, sql_group, -1, &stmt_group, nullptr) != SQLITE_OK)
     {
         std::cerr << "❌ Prepare failed (delete_group - group): " << sqlite3_errmsg(db) << std::endl;
@@ -231,4 +231,110 @@ bool delete_group(sqlite3* db, int group_id)
 
     sqlite3_finalize(stmt_group);
     return true;
+}
+
+// Lấy tất cả các nhóm mà người dùng tham gia cùng với vai trò
+std::vector<Group> get_all_group(sqlite3 *db, int user_id)
+{
+    std::vector<Group> groups;
+    sqlite3_stmt *stmt;
+
+    const char *sql = R"(
+        SELECT g.group_id, g.group_name, g.created_by
+        FROM groups g
+        INNER JOIN group_members gm ON g.group_id = gm.group_id
+        WHERE gm.user_id = ?;
+    )";
+
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
+    {
+        std::cerr << "❌ Prepare failed (get_all_group): "
+                  << sqlite3_errmsg(db) << std::endl;
+        return groups;
+    }
+
+    sqlite3_bind_int(stmt, 1, user_id);
+
+    while (sqlite3_step(stmt) == SQLITE_ROW)
+    {
+        int group_id = sqlite3_column_int(stmt, 0);
+        std::string group_name = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 1));
+        int owner_id = sqlite3_column_int(stmt, 2);
+        std::string role = (owner_id == user_id) ? "owner" : "member";
+
+        groups.push_back({group_id, group_name, role});
+    }
+
+    sqlite3_finalize(stmt);
+    return groups;
+}
+
+bool send_group_message(sqlite3 *db, const int sender_id, const int group_id, const std::string &content)
+{
+    // 5. Insert message into group_messages table
+    sqlite3_stmt *stmt;
+    const char *sql = "INSERT INTO group_messages (sender_id, group_id, content) VALUES (?, ?, ?);";
+
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
+    {
+        std::cerr << "❌ Prepare failed (send_group_message): " << sqlite3_errmsg(db) << std::endl;
+        return false;
+    }
+
+    sqlite3_bind_int(stmt, 1, sender_id);
+    sqlite3_bind_int(stmt, 2, group_id);
+    sqlite3_bind_text(stmt, 3, content.c_str(), -1, SQLITE_STATIC);
+
+    if (sqlite3_step(stmt) != SQLITE_DONE)
+    {
+        std::cerr << "❌ Execution failed (send_group_message): " << sqlite3_errmsg(db) << std::endl;
+        sqlite3_finalize(stmt);
+        return false;
+    }
+
+    // 6. Send success response
+    std::cout << "[SEND_GROUP_MESSAGE] User " << sender_id << " sent message to group " << group_id << std::endl;
+    sqlite3_finalize(stmt);
+    return true;
+}
+
+// Get all messages for a group
+std::vector<GroupMessage> get_group_messages(sqlite3 *db, int group_id)
+{
+    std::vector<GroupMessage> messages;
+    sqlite3_stmt *stmt;
+
+    const char *sql = R"(
+        SELECT gm.message_id, gm.sender_id, a.username, gm.content, gm.timestamp
+        FROM group_messages gm
+        INNER JOIN accounts a ON gm.sender_id = a.id
+        WHERE gm.group_id = ?
+        ORDER BY gm.timestamp ASC;
+    )";
+
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
+    {
+        std::cerr << "❌ Prepare failed (get_group_messages): "
+                  << sqlite3_errmsg(db) << std::endl;
+        return messages;
+    }
+
+    sqlite3_bind_int(stmt, 1, group_id);
+
+    while (sqlite3_step(stmt) == SQLITE_ROW)
+    {
+        int message_id = sqlite3_column_int(stmt, 0);
+        int sender_id = sqlite3_column_int(stmt, 1);
+        std::string sender_username = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 2));
+        std::string content = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 3));
+        std::string timestamp = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 4));
+
+        messages.push_back({message_id, sender_id, sender_username, content, timestamp});
+    }
+
+    sqlite3_finalize(stmt);
+    std::cout << "[GET_GROUP_MESSAGES] Retrieved " << messages.size()
+              << " messages from group " << group_id << std::endl;
+
+    return messages;
 }

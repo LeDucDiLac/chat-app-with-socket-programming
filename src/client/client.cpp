@@ -82,6 +82,15 @@ void *receive_thread(void *arg)
                               << " (" << friend_data["user_state"].get<std::string>() << ")" << std::endl;
                 }
                 break;
+            
+                case 2400: // FRIEND_LIST_DATA
+                std::cout << "\n[GROUP LIST]:" << std::endl;
+                for (const auto &group_data : response["data"]["groups"])
+                {
+                    std::cout << "  - " << group_data["group_name"].get<std::string>()
+                              << " (" << group_data["role"].get<std::string>() << ")" << std::endl;
+                }
+                break;
 
             case 2005: // OFFLINE_MESSAGES_DATA
                 std::cout << "\n[OFFLINE MESSAGES]:" << std::endl;
@@ -89,6 +98,16 @@ void *receive_thread(void *arg)
                 {
                     std::cout << "  From " << msg["sender_username"]
                               << ": " << msg["content"] << std::endl;
+                }
+                break;
+
+            case 2405: // GROUP_MESSAGES_DATA
+                std::cout << "\n[GROUP MESSAGES - " << response["data"]["group_name"].get<std::string>() << "]:" << std::endl;
+                for (const auto &msg : response["data"]["messages"])
+                {
+                    std::cout << "  " << msg["sender_username"].get<std::string>()
+                              << ": " << msg["content"].get<std::string>()
+                              << " [" << msg["timestamp"].get<std::string>() << "]" << std::endl;
                 }
                 break;
 
@@ -241,20 +260,13 @@ void handle_message_menu()
 
     case 2: // Send Group Message
     {
-        int group_id;
-        std::cout << "Group ID: ";
-        if (!(std::cin >> group_id))
-        {
-            std::cin.clear();
-            std::cin.ignore(10000, '\n');
-            std::cout << "Invalid input\n";
-            return;
-        }
-        std::cin.ignore(10000, '\n');
-        request["type"] = 1004;
-        request["data"]["group_id"] = group_id;
+        std::string group_name;
+        std::cout << "Group's name: ";
+        std::getline(std::cin, group_name);
         std::cout << "Message: ";
         std::getline(std::cin, input);
+        request["type"] = 1202;
+        request["data"]["group_name"] = group_name;
         request["data"]["content"] = input;
         send_request(request);
         break;
@@ -349,6 +361,8 @@ void handle_group_menu()
     std::cout << "2. Add User to Group" << std::endl;
     std::cout << "3. Remove User from Group" << std::endl;
     std::cout << "4. Leave Group" << std::endl;
+    std::cout << "5. My Groups" << std::endl;
+    std::cout << "6. Get Group Messages" << std::endl;
     std::cout << "0. Back" << std::endl;
     std::cout << "> ";
 
@@ -408,6 +422,25 @@ void handle_group_menu()
         std::cout << "Group's name: ";
         std::getline(std::cin, group_name);
         request["type"] = 1403;
+        request["data"]["group_name"] = group_name;
+        send_request(request);
+        break;
+    }
+
+    case 5: // Get Group List
+    {
+        request["type"] = 1404;
+        request["data"] = json::object();
+        send_request(request);
+        break;
+    }
+
+    case 6: // Get Group Messages
+    {
+        std::string group_name;
+        std::cout << "Group's name: ";
+        std::getline(std::cin, group_name);
+        request["type"] = 1405;
         request["data"]["group_name"] = group_name;
         send_request(request);
         break;
