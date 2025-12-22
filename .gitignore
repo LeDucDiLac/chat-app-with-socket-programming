@@ -9,6 +9,7 @@ test_auth
 test_complete
 test_groups
 test_friends
+database/chat.db
 *.sql
 
 

@@ -77,7 +77,8 @@ void *receive_thread(void *arg)
                 
                 if (in_chat_mode && current_chat_partner_id == sender_id) {
                     // If we are chatting with this person, just print the message
-                    std::cout << "\r\033[K" << sender_name << ": " << content << "\n> " ;
+                    std::cout << sender_name << ": " << content << std::endl;
+                    std::cout << "> ";
                 } else {
                     // Otherwise print notification
                     std::cout << "\n[NEW MESSAGE] From " << sender_name
@@ -128,23 +129,18 @@ void *receive_thread(void *arg)
                 }
                 break;
 
-            case 2005: // MESSAGE_HISTORY / OFFLINE_MESSAGES_DATA
+            case 2005: // MESSAGE_HISTORY 
                 if (response["data"].contains("messages")) {
                     if (!in_chat_mode) std::cout << "\n[MESSAGES]:" << std::endl;
                     for (const auto &msg : response["data"]["messages"])
                     {
-                        // If in chat mode, format nicely
-                        if (in_chat_mode) {
                             int sender_id = msg["sender_id"];
                             if (sender_id == current_chat_partner_id) {
                                 std::cout << "Partner: " << msg["content"].get<std::string>() << std::endl;
                             } else {
                                 std::cout << "You: " << msg["content"].get<std::string>() << std::endl;
                             }
-                        } else {
-                            std::cout << "  From " << msg["sender_id"] // TODO: Should be username
-                                      << ": " << msg["content"].get<std::string>() << std::endl;
-                        }
+                        
                     }
                     if (in_chat_mode) {
                         std::cout << "> " ;
