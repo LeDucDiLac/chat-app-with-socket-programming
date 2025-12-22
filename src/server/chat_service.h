@@ -84,56 +84,8 @@ int get_direct_message_history(sqlite3* db, int user_id1, int user_id2,
                                std::vector<Message>& messages, 
                                int limit = 10, int offset = 0);
 
-/**
- * Send a message to a group chat
- * 
- * @param db Database connection handle
- * @param sender_id ID of the user sending the message
- * @param group_id ID of the group to send the message to
- * @param content Text content of the message
- * 
- * @return DB_SUCCESS on success
- *         DB_NOT_GROUP_MEMBER if sender is not a member of the group
- *         DB_GROUP_NOT_FOUND if group doesn't exist
- *         DB_ERROR on database error
- */
-int send_group_message(sqlite3* db, int sender_id, int group_id, 
-                      const std::string& content);
 
-/**
- * Retrieve message history for a group chat
- * 
- * @param db Database connection handle
- * @param group_id ID of the group
- * @param messages Output vector to store retrieved messages (sorted by timestamp ascending)
- * @param limit Maximum number of messages to retrieve (default: 10)
- * @param offset Number of messages to skip for pagination (default: 0)
- * 
- * @return DB_SUCCESS on success
- *         DB_GROUP_NOT_FOUND if group doesn't exist
- *         DB_ERROR on database error
- * 
- * @note Messages are returned in chronological order (oldest first)
- */
-int get_group_message_history(sqlite3* db, int group_id, 
-                              std::vector<Message>& messages,
-                              int limit = 10, int offset = 0);
 
-/**
- * Retrieve all offline messages for a user (messages received while offline)
- * 
- * @param db Database connection handle
- * @param user_id ID of the user
- * @param messages Output vector to store retrieved offline messages
- * 
- * @return DB_SUCCESS on success
- *         DB_ERROR on database error
- * 
- * @note This retrieves messages where is_offline=1 and receiver_id=user_id
- * @note Messages should be marked as read after retrieval using mark_messages_read
- */
-int get_offline_messages(sqlite3* db, int user_id, 
-                        std::vector<Message>& messages);
 
 /**
  * Mark all messages from a specific sender to a user as read
@@ -149,21 +101,7 @@ int get_offline_messages(sqlite3* db, int user_id,
  */
 int mark_messages_read(sqlite3* db, int user_id, int sender_id);
 
-/**
- * Mark all group messages as read for a specific user in a group
- * 
- * @param db Database connection handle
- * @param user_id ID of the user who read the messages
- * @param group_id ID of the group
- * 
- * @return DB_SUCCESS on success
- *         DB_NOT_GROUP_MEMBER if user is not in the group
- *         DB_ERROR on database error
- * 
- * @note This doesn't modify the messages table (group messages don't track individual read status)
- * @note Implementation may track read receipts in a separate table if needed
- */
-int mark_group_messages_read(sqlite3* db, int user_id, int group_id);
+
 
 /**
  * Get list of active conversations (both direct and group) for a user
@@ -182,18 +120,6 @@ int mark_group_messages_read(sqlite3* db, int user_id, int group_id);
 int get_active_conversations(sqlite3* db, int user_id, 
                              std::vector<Conversation>& conversations);
 
-
-/**
- * Check if a user is a member of a group
- * 
- * @param db Database connection handle
- * @param user_id ID of the user
- * @param group_id ID of the group
- * 
- * @return true if user is a member (exists in group_members table)
- *         false otherwise
- */
-bool is_group_member(sqlite3* db, int user_id, int group_id);
 
 /**
  * Get total count of unread messages for a user
