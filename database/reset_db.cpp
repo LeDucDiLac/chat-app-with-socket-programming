@@ -88,23 +88,35 @@ void create_tables(sqlite3 *db)
                 ");",
                 "group_members table created");
 
-    // messages table
+    // direct_messages table
     execute_sql(db,
-                "CREATE TABLE IF NOT EXISTS messages ("
+                "CREATE TABLE IF NOT EXISTS direct_messages ("
                 "    message_id INTEGER PRIMARY KEY AUTOINCREMENT,"
                 "    sender_id INTEGER NOT NULL,"
-                "    receiver_id INTEGER DEFAULT NULL,"
-                "    group_id INTEGER DEFAULT NULL,"
+                "    receiver_id INTEGER NOT NULL,"
                 "    content TEXT NOT NULL,"
                 "    timestamp INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP,"
                 "    is_read INTEGER DEFAULT 0 CHECK(is_read IN (0, 1)),"
                 "    is_offline INTEGER DEFAULT 0 CHECK(is_offline IN (0, 1)),"
                 "    FOREIGN KEY(sender_id) REFERENCES accounts(id) ON DELETE CASCADE,"
                 "    FOREIGN KEY(receiver_id) REFERENCES accounts(id) ON DELETE CASCADE,"
-                "    FOREIGN KEY(group_id) REFERENCES groups(group_id) ON DELETE CASCADE,"
-                "    CHECK((receiver_id IS NULL) != (group_id IS NULL))"
+                "    CHECK(sender_id != receiver_id)"
                 ");",
-                "messages table created");
+                "direct_messages table created");
+
+    // group_messages table
+    execute_sql(db,
+                "CREATE TABLE IF NOT EXISTS group_messages ("
+                "    message_id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                "    sender_id INTEGER NOT NULL,"
+                "    group_id INTEGER NOT NULL,"
+                "    content TEXT NOT NULL,"
+                "    timestamp INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+                "    is_read INTEGER DEFAULT 0 CHECK(is_read IN (0, 1)),"
+                "    FOREIGN KEY(sender_id) REFERENCES accounts(id) ON DELETE CASCADE,"
+                "    FOREIGN KEY(group_id) REFERENCES groups(group_id) ON DELETE CASCADE"
+                ");",
+                "group_messages table created");
 
 
     // activity_logs table
@@ -197,26 +209,31 @@ void seed_data(sqlite3 *db)
         std::to_string(day_ago) + ");"; // Work Team: diana
     execute_sql(db, insert_group_members.c_str(), "group_members seeded");
 
-    // Insert messages
-    std::string insert_messages =
-        "INSERT OR IGNORE INTO messages (sender_id, receiver_id, group_id, content, timestamp, is_read, is_offline) VALUES "
-        "(1, 2, NULL, 'Hey Bob, how are you?', " +
+    // Insert direct messages
+    std::string insert_direct_messages =
+        "INSERT OR IGNORE INTO direct_messages (sender_id, receiver_id, content, timestamp, is_read, is_offline) VALUES "
+        "(1, 2, 'Hey Bob, how are you?', " +
         std::to_string(week_ago) + ", 1, 0),"
-                                   "(2, 1, NULL, 'I''m good Alice, thanks!', " +
+                                   "(2, 1, 'I''m good Alice, thanks!', " +
         std::to_string(week_ago) + ", 1, 0),"
-                                   "(3, 1, NULL, 'Hi Alice!', " +
+                                   "(3, 1, 'Hi Alice!', " +
         std::to_string(day_ago) + ", 0, 1)," // offline message
-                                  "(1, NULL, 1, 'Welcome to Study Group everyone', " +
-        std::to_string(week_ago) + ", 1, 0),"
-                                   "(2, NULL, 1, 'Thanks for adding me!', " +
-        std::to_string(week_ago) + ", 1, 0),"
-                                   "(4, 1, NULL, 'Can we talk later?', " +
-        std::to_string(day_ago) + ", 0, 1)," // offline message
-                                  "(2, NULL, 2, 'Ready to play?', " +
-        std::to_string(week_ago) + ", 1, 0),"
-                                   "(3, NULL, 2, 'Let''s go!', " +
-        std::to_string(week_ago) + ", 1, 0);";
-    execute_sql(db, insert_messages.c_str(), "messages seeded");
+                                  "(4, 1, 'Can we talk later?', " +
+        std::to_string(day_ago) + ", 0, 1);"; // offline message
+    execute_sql(db, insert_direct_messages.c_str(), "direct_messages seeded");
+
+    // Insert group messages
+    std::string insert_group_messages =
+        "INSERT OR IGNORE INTO group_messages (sender_id, group_id, content, timestamp, is_read) VALUES "
+        "(1, 1, 'Welcome to Study Group everyone', " +
+        std::to_string(week_ago) + ", 1),"
+                                   "(2, 1, 'Thanks for adding me!', " +
+        std::to_string(week_ago) + ", 1),"
+                                   "(2, 2, 'Ready to play?', " +
+        std::to_string(week_ago) + ", 1),"
+                                   "(3, 2, 'Let''s go!', " +
+        std::to_string(week_ago) + ", 1);";
+    execute_sql(db, insert_group_messages.c_str(), "group_messages seeded");
 
     // Insert activity logs
     std::string insert_activity_logs =
@@ -246,7 +263,7 @@ void display_summary(sqlite3 *db)
 
     // Count tables
     const char *tables[] = {"accounts", "friend_requests", "friendships", "groups",
-                            "group_members", "messages", "activity_logs"};
+                            "group_members", "direct_messages", "group_messages", "activity_logs"};
 
     for (const char *table : tables)
     {
