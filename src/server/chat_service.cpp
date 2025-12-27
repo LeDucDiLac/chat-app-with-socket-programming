@@ -91,9 +91,6 @@ int get_direct_message_history(sqlite3* db, int user_id1, int user_id2, std::vec
     return DB_SUCCESS;
 }
 
-
-
-
 int mark_messages_read(sqlite3* db, int user_id, int sender_id) {
     const char* query = "UPDATE direct_messages SET is_read = 1 WHERE receiver_id = ? AND sender_id = ? AND is_read = 0";
     sqlite3_stmt *stmt;

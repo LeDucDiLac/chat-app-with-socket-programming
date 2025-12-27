@@ -9,12 +9,13 @@
 #include <pthread.h>
 #include <sqlite3.h>
 #include "protocol.h"
-#include "account_service.h"
 #include "../../libs/json.hpp"
 
+#include "account_service.h"
 #include "friend_service.h"
 #include "group_service.h"
 #include "chat_service.h"
+#include "write_log.h"
 
 using json = nlohmann::json;
 
@@ -331,15 +332,17 @@ void handle_register(int client_sock, const json &request)
         if (result == DB_USER_EXISTS)
         {
             send_response(client_sock, 409, "Username already exists");
+            log_activity(g_db, -1, ACT_REGISTER, -1, ERR_USER_EXISTS);
         }
         else if (result == DB_ERROR)
         {
             send_response(client_sock, 500, "Database error");
+            log_activity(g_db, -1, ACT_REGISTER, -1, ERR_DATABASE_ERROR);
         }
         else
         {
             // Log registration activity
-            log_activity(g_db, user_id, "register", "User registered");
+            log_activity(g_db, user_id, ACT_REGISTER, -1, RESP_CREATED);
 
             json response = {
                 {"type", 2000},
@@ -353,6 +356,7 @@ void handle_register(int client_sock, const json &request)
     {
         std::cerr << "[REGISTER] JSON error: " << e.what() << std::endl;
         send_response(client_sock, 400, "Invalid request format");
+        log_activity(g_db, -1, ACT_REGISTER, -1, ERR_INVALID_REQUEST);
     }
 }
 
@@ -371,18 +375,22 @@ void handle_login(int client_sock, const json &request)
         if (result == DB_USER_NOT_FOUND)
         {
             send_response(client_sock, 404, "User not found");
+            log_activity(g_db, -1, ACT_LOGIN, -1, ERR_USER_NOT_FOUND);
         }
         else if (result == DB_INVALID_PASSWORD)
         {
             send_response(client_sock, 401, "Invalid password");
+            log_activity(g_db, user_id, ACT_LOGIN, -1, ERR_WRONG_PASSWORD);
         }
         else if (result == DB_USER_BANNED)
         {
             send_response(client_sock, 403, "Account is banned");
+            log_activity(g_db, user_id, ACT_LOGIN, -1, ERR_USER_BANNED);
         }
         else if (result == DB_ERROR)
         {
             send_response(client_sock, 500, "Database error");
+            log_activity(g_db, user_id, ACT_LOGIN, -1, ERR_DATABASE_ERROR);
         }
         else
         {
@@ -393,6 +401,7 @@ void handle_login(int client_sock, const json &request)
             {
                 pthread_mutex_unlock(&sessions_mutex);
                 send_response(client_sock, 409, "Already logged in. Please logout first");
+                log_activity(g_db, user_id, ACT_LOGIN, -1, ERR_ALREADY_LOGGED_IN);
                 return;
             }
 
@@ -411,6 +420,7 @@ void handle_login(int client_sock, const json &request)
             {
                 pthread_mutex_unlock(&sessions_mutex);
                 send_response(client_sock, 409, "User already logged in from another connection");
+                log_activity(g_db, user_id, ACT_LOGIN, -1, ERR_USER_LOGGED_IN_ELSEWHERE);
                 return;
             }
 
@@ -423,7 +433,7 @@ void handle_login(int client_sock, const json &request)
             update_user_state(g_db, user_id, "online");
 
             // Log login activity
-            log_activity(g_db, user_id, "login", "User logged in");
+            log_activity(g_db, user_id, ACT_LOGIN, -1, RESP_SUCCESS);
 
             json response = {
                 {"type", 2000},
@@ -437,6 +447,7 @@ void handle_login(int client_sock, const json &request)
     {
         std::cerr << "[LOGIN] JSON error: " << e.what() << std::endl;
         send_response(client_sock, 400, "Invalid request format");
+        log_activity(g_db, -1, ACT_LOGIN, -1, ERR_INVALID_REQUEST);
     }
 }
 
@@ -462,7 +473,7 @@ void handle_logout(int client_sock, const json &request)
             update_user_state(g_db, user_id, "offline");
 
             // Log logout activity
-            log_activity(g_db, user_id, "logout", "User logged out");
+            log_activity(g_db, user_id, ACT_LOGOUT, -1, RESP_SUCCESS);
 
             send_response(client_sock, 200, "Logout successful");
 
@@ -474,6 +485,7 @@ void handle_logout(int client_sock, const json &request)
 
     pthread_mutex_unlock(&sessions_mutex);
     send_response(client_sock, 401, "Not logged in");
+    log_activity(g_db, -1, ACT_LOGOUT, -1, ERR_NOT_LOGGED_IN);
 }
 
 void handle_send_message(int client_sock, const json &request)
@@ -481,11 +493,13 @@ void handle_send_message(int client_sock, const json &request)
     Session* session = find_session_by_socket(client_sock);
     if (!session) {
         send_response(client_sock, 401, "You are not logged in");
+        log_activity(g_db, -1, ACT_SEND_MESSAGE, -1, ERR_NOT_LOGGED_IN);
         return;
     }
 
     if (!request.contains("data") || !request["data"].contains("receiver_id") || !request["data"].contains("content")) {
         send_response(client_sock, 400, "Missing receiver_id or content");
+        log_activity(g_db, session->user_id, ACT_SEND_MESSAGE, -1, ERR_INVALID_REQUEST);
         return;
     }
 
@@ -497,7 +511,7 @@ void handle_send_message(int client_sock, const json &request)
 
     if (result == DB_SUCCESS) {
         send_response(client_sock, 200, "Message sent successfully");
-
+        log_activity(g_db, sender_id, ACT_SEND_MESSAGE, receiver_id, RESP_SUCCESS);
         // Check if receiver is online
         int receiver_sock = -1;
         pthread_mutex_lock(&sessions_mutex);
@@ -525,8 +539,10 @@ void handle_send_message(int client_sock, const json &request)
         }
     } else if (result == DB_NOT_FRIENDS_TO_SEND) {
         send_response(client_sock, 403, "You are not friends with this user");
+        log_activity(g_db, sender_id, ACT_SEND_MESSAGE, receiver_id, ERR_NOT_FRIEND);
     } else {
         send_response(client_sock, 500, "Failed to send message");
+        log_activity(g_db, sender_id, ACT_SEND_MESSAGE, receiver_id, ERR_DATABASE_ERROR);
     }
 }
 
@@ -535,11 +551,13 @@ void handle_get_message_history(int client_sock, const json& request)
     Session* session = find_session_by_socket(client_sock);
     if (!session) {
         send_response(client_sock, 401, "You are not logged in");
+        log_activity(g_db, -1, ACT_GET_DIRECT_MESSAGES, -1, ERR_NOT_LOGGED_IN);
         return;
     }
 
     if (!request.contains("data") || !request["data"].contains("target_id")) {
         send_response(client_sock, 400, "Missing target_id");
+        log_activity(g_db, session->user_id, ACT_GET_DIRECT_MESSAGES, -1, ERR_INVALID_REQUEST);
         return;
     }
 
@@ -570,10 +588,13 @@ void handle_get_message_history(int client_sock, const json& request)
         }
         std::string response_str = response.dump();
         send_json_packet(client_sock, response_str.c_str());
+        log_activity(g_db, user_id1, ACT_GET_DIRECT_MESSAGES, user_id2, RESP_SUCCESS);
     } else if (result == DB_NOT_FRIENDS_TO_SEND) {
         send_response(client_sock, 403, "You are not friends with this user");
+        log_activity(g_db, user_id1, ACT_GET_DIRECT_MESSAGES, user_id2, ERR_NOT_FRIEND);
     } else {
         send_response(client_sock, 500, "Failed to retrieve messages");
+        log_activity(g_db, user_id1, ACT_GET_DIRECT_MESSAGES, user_id2, ERR_DATABASE_ERROR);
     }
 }
 
@@ -583,7 +604,8 @@ void handle_send_group_message(int client_sock, const json &request)
     Session *session = find_session_by_socket(client_sock);
     if (!session)
     {
-        send_response(client_sock, 401, "You are not authenticated");
+        send_response(client_sock, 401, "You are not logged in");
+        log_activity(g_db, -1, ACT_SEND_GROUP_MESSAGE, -1, ERR_NOT_LOGGED_IN);
         return;
     }
 
@@ -595,6 +617,7 @@ void handle_send_group_message(int client_sock, const json &request)
         !request["data"].contains("content"))
     {
         send_response(client_sock, 400, "Invalid request format: Missing group_name or content");
+        log_activity(g_db, sender_id, ACT_SEND_GROUP_MESSAGE, -1, ERR_INVALID_REQUEST);
         return;
     }
 
@@ -606,6 +629,7 @@ void handle_send_group_message(int client_sock, const json &request)
     if (group_id == -1)
     {
         send_response(client_sock, 404, "Group not found");
+        log_activity(g_db, sender_id, ACT_SEND_GROUP_MESSAGE, -1, ERR_GROUP_NOT_FOUND);
         return;
     }
 
@@ -613,14 +637,18 @@ void handle_send_group_message(int client_sock, const json &request)
     if (!is_group_member(g_db, group_id, sender_id))
     {
         send_response(client_sock, 403, "You are not a member of this group");
+        log_activity(g_db, sender_id, ACT_SEND_GROUP_MESSAGE, group_id, ERR_NOT_GROUP_MEMBER);
         return;
     }
 
     if (!send_group_message(g_db, sender_id, group_id, content)){
         send_response(client_sock, 500, "Failed to send message");
+        log_activity(g_db, sender_id, ACT_SEND_GROUP_MESSAGE, group_id, ERR_DATABASE_ERROR);
+        return;
     };
 
     send_response(client_sock, 200, "Message sent successfully");
+    log_activity(g_db, sender_id, ACT_SEND_GROUP_MESSAGE, group_id, RESP_SUCCESS);
 }
 
 void handle_get_friend_request(int client_sock, const json &request)
@@ -630,6 +658,7 @@ void handle_get_friend_request(int client_sock, const json &request)
     if (!session)
     {
         send_response(client_sock, 401, "You are not logged in");
+        log_activity(g_db, -1, ACT_GET_FRIEND_REQUESTS, -1, ERR_NOT_LOGGED_IN);
         return;
     }
     int receiver_id = session->user_id;
@@ -646,6 +675,7 @@ void handle_get_friend_request(int client_sock, const json &request)
 
     std::string response_str = response.dump();
     send_json_packet(client_sock, response_str.c_str());
+    log_activity(g_db, receiver_id, ACT_GET_FRIEND_REQUESTS, -1, RESP_SUCCESS);
 }
 
 void handle_send_friend_request(int client_sock, const json &request)
@@ -656,33 +686,36 @@ void handle_send_friend_request(int client_sock, const json &request)
     if (!senderSession)
     {
         send_response(client_sock, 401, "Session not found");
+        log_activity(g_db, -1, ACT_SEND_FRIEND_REQUEST, -1, ERR_NOT_LOGGED_IN);
         return;
     }
+
+    int senderId = senderSession->user_id;
 
     // 2. Lấy username người nhận từ JSON
     if (!request.contains("data") || !request["data"].contains("target_username"))
     {
         send_response(client_sock, 400, "Missing receiver username");
+        log_activity(g_db, senderId, ACT_SEND_FRIEND_REQUEST, -1, ERR_INVALID_REQUEST);
         return;
     }
 
     std::string receiverUsername = request["data"]["target_username"];
 
     // 3. Lấy user id từ DB
-    int senderId = senderSession->user_id;
     int receiverId = get_user_id_by_username(g_db, receiverUsername);
-
-    std::cout << senderId << receiverId << std::endl;
 
     if (receiverId == -1)
     {
         send_response(client_sock, 404, "Receiver not found");
+        log_activity(g_db, senderId, ACT_SEND_FRIEND_REQUEST, receiverId, ERR_USER_NOT_FOUND);
         return;
     }
 
     if (senderId == receiverId)
     {
         send_response(client_sock, 400, "You cannot send friend request to yourself");
+        log_activity(g_db, senderId, ACT_SEND_FRIEND_REQUEST, receiverId, ERR_SELF_REQUEST);
         return;
     }
 
@@ -690,12 +723,14 @@ void handle_send_friend_request(int client_sock, const json &request)
     if (friend_request_exists(g_db, senderId, receiverId))
     {
         send_response(client_sock, 409, "Friend request already exists");
+        log_activity(g_db, senderId, ACT_SEND_FRIEND_REQUEST, receiverId, ERR_FRIEND_REQUEST_EXISTS);
         return;
     }
 
     if (friendship_exists(g_db, senderId, receiverId))
     {
         send_response(client_sock, 409, "Already friend");
+        log_activity(g_db, senderId, ACT_SEND_FRIEND_REQUEST, receiverId, ERR_ALREADY_FRIEND);
         return;
     }
 
@@ -703,11 +738,13 @@ void handle_send_friend_request(int client_sock, const json &request)
     if (!add_friend_request(g_db, senderId, receiverId))
     {
         send_response(client_sock, 500, "Failed to create friend request");
+        log_activity(g_db, senderId, ACT_SEND_FRIEND_REQUEST, receiverId, ERR_DATABASE_ERROR);
         return;
     }
 
     // 6. Thành công
     send_response(client_sock, 200, "Friend request sent successfully");
+    log_activity(g_db, senderId, ACT_SEND_FRIEND_REQUEST, receiverId, RESP_SUCCESS);
 }
 
 void handle_accept_friend_request(int client_sock, const json &request)
@@ -717,6 +754,7 @@ void handle_accept_friend_request(int client_sock, const json &request)
     if (!session)
     {
         send_response(client_sock, 401, "You are not authenticated");
+        log_activity(g_db, -1, ACT_ACCEPT_FRIEND_REQUEST, -1, ERR_NOT_LOGGED_IN);
         return;
     }
 
@@ -728,6 +766,7 @@ void handle_accept_friend_request(int client_sock, const json &request)
         !request["data"].contains("target_username"))
     {
         send_response(client_sock, 400, "Invalid request format");
+        log_activity(g_db, receiver_id, ACT_ACCEPT_FRIEND_REQUEST, -1, ERR_INVALID_REQUEST);
         return;
     }
 
@@ -738,6 +777,7 @@ void handle_accept_friend_request(int client_sock, const json &request)
     if (sender_id == -1)
     {
         send_response(client_sock, 404, "User not found");
+        log_activity(g_db, receiver_id, ACT_ACCEPT_FRIEND_REQUEST, -1, ERR_USER_NOT_FOUND);
         return;
     }
 
@@ -745,6 +785,7 @@ void handle_accept_friend_request(int client_sock, const json &request)
     if (friendship_exists(g_db, sender_id, receiver_id))
     {
         send_response(client_sock, 409, "You are already friends");
+        log_activity(g_db, receiver_id, ACT_ACCEPT_FRIEND_REQUEST, sender_id, ERR_ALREADY_FRIEND);
         return;
     }
 
@@ -752,6 +793,7 @@ void handle_accept_friend_request(int client_sock, const json &request)
     if (!friend_request_exists(g_db, sender_id, receiver_id))
     {
         send_response(client_sock, 404, "Friend request not found");
+        log_activity(g_db, receiver_id, ACT_ACCEPT_FRIEND_REQUEST, sender_id, ERR_FRIEND_REQUEST_NOT_FOUND);
         return;
     }
 
@@ -759,6 +801,7 @@ void handle_accept_friend_request(int client_sock, const json &request)
     if (!add_friendship(g_db, sender_id, receiver_id))
     {
         send_response(client_sock, 500, "Failed to add friend");
+        log_activity(g_db, receiver_id, ACT_ACCEPT_FRIEND_REQUEST, sender_id, ERR_DATABASE_ERROR);
         return;
     }
 
@@ -766,10 +809,13 @@ void handle_accept_friend_request(int client_sock, const json &request)
     if (!remove_friend_request(g_db, sender_id, receiver_id))
     {
         send_response(client_sock, 500, "Failed to delete friend request");
+        log_activity(g_db, receiver_id, ACT_ACCEPT_FRIEND_REQUEST, sender_id, ERR_DATABASE_ERROR);
+
         return;
     }
 
     send_response(client_sock, 200, "Friend added");
+    log_activity(g_db, receiver_id, ACT_ACCEPT_FRIEND_REQUEST, sender_id, RESP_SUCCESS);
 }
 
 void handle_reject_friend_request(int client_sock, const json &request)
@@ -779,6 +825,7 @@ void handle_reject_friend_request(int client_sock, const json &request)
     if (!session)
     {
         send_response(client_sock, 401, "You are not authenticated");
+        log_activity(g_db, -1, ACT_ACCEPT_FRIEND_REQUEST, -1, ERR_NOT_LOGGED_IN);
         return;
     }
 
@@ -790,6 +837,7 @@ void handle_reject_friend_request(int client_sock, const json &request)
         !request["data"].contains("target_username"))
     {
         send_response(client_sock, 400, "Invalid request format");
+        log_activity(g_db, receiver_id, ACT_REJECT_FRIEND_REQUEST, -1, ERR_INVALID_REQUEST);
         return;
     }
 
@@ -800,6 +848,7 @@ void handle_reject_friend_request(int client_sock, const json &request)
     if (sender_id == -1)
     {
         send_response(client_sock, 404, "User not found");
+        log_activity(g_db, receiver_id, ACT_REJECT_FRIEND_REQUEST, -1, ERR_USER_NOT_FOUND);
         return;
     }
 
@@ -807,6 +856,7 @@ void handle_reject_friend_request(int client_sock, const json &request)
     if (friendship_exists(g_db, sender_id, receiver_id))
     {
         send_response(client_sock, 409, "You are already friends");
+        log_activity(g_db, receiver_id, ACT_REJECT_FRIEND_REQUEST, sender_id, ERR_ALREADY_FRIEND);
         return;
     }
 
@@ -814,6 +864,7 @@ void handle_reject_friend_request(int client_sock, const json &request)
     if (!friend_request_exists(g_db, sender_id, receiver_id))
     {
         send_response(client_sock, 404, "Friend request not found");
+        log_activity(g_db, receiver_id, ACT_REJECT_FRIEND_REQUEST, sender_id, ERR_FRIEND_REQUEST_NOT_FOUND);
         return;
     }
 
@@ -821,10 +872,12 @@ void handle_reject_friend_request(int client_sock, const json &request)
     if (!remove_friend_request(g_db, sender_id, receiver_id))
     {
         send_response(client_sock, 500, "Failed to delete friend request");
+        log_activity(g_db, receiver_id, ACT_REJECT_FRIEND_REQUEST, sender_id, ERR_DATABASE_ERROR);
         return;
     }
 
     send_response(client_sock, 200, "Friend request rejected");
+    log_activity(g_db, receiver_id, ACT_REJECT_FRIEND_REQUEST, sender_id, RESP_SUCCESS);
 }
 
 void handle_unfriend(int client_sock, const json &request)
@@ -834,6 +887,7 @@ void handle_unfriend(int client_sock, const json &request)
     if (!session)
     {
         send_response(client_sock, 401, "You are not authenticated");
+        log_activity(g_db, -1, ACT_UNFRIEND, -1, ERR_NOT_LOGGED_IN);
         return;
     }
 
@@ -843,6 +897,7 @@ void handle_unfriend(int client_sock, const json &request)
         !request["data"].contains("target_username"))
     {
         send_response(client_sock, 400, "Invalid request format");
+        log_activity(g_db, user_id1, ACT_UNFRIEND, -1, ERR_INVALID_REQUEST);
         return;
     }
 
@@ -853,6 +908,7 @@ void handle_unfriend(int client_sock, const json &request)
     if (user_id2 == -1)
     {
         send_response(client_sock, 404, "User not found");
+        log_activity(g_db, user_id1, ACT_UNFRIEND, -1, ERR_USER_NOT_FOUND);
         return;
     }
 
@@ -860,16 +916,19 @@ void handle_unfriend(int client_sock, const json &request)
     if (!friendship_exists(g_db, user_id1, user_id2))
     {
         send_response(client_sock, 409, "You are not friends");
+        log_activity(g_db, user_id1, ACT_UNFRIEND, user_id2, ERR_NOT_FRIEND);
         return;
     }
 
     if (!remove_friendship(g_db, user_id1, user_id2))
     {
         send_response(client_sock, 500, "Failed to unfriend");
+        log_activity(g_db, user_id1, ACT_UNFRIEND, user_id2, ERR_DATABASE_ERROR);
         return;
     }
 
     send_response(client_sock, 200, "Unfriend successfully");
+    log_activity(g_db, user_id1, ACT_UNFRIEND, user_id2, RESP_SUCCESS);
 }
 
 void handle_get_friend_list(int client_sock, const json &request)
@@ -877,7 +936,8 @@ void handle_get_friend_list(int client_sock, const json &request)
     Session *session = find_session_by_socket(client_sock);
     if (!session)
     {
-        send_response(client_sock, 401, "You are not authenticated");
+        send_response(client_sock, 401, "You are not logged in");
+        log_activity(g_db, -1, ACT_GET_FRIEND_LIST, -1, ERR_NOT_LOGGED_IN);
         return;
     }
     int user_id = session->user_id;
@@ -895,6 +955,7 @@ void handle_get_friend_list(int client_sock, const json &request)
     }
     std::string response_str = response.dump();
     send_json_packet(client_sock, response_str.c_str());
+    log_activity(g_db, user_id, ACT_GET_FRIEND_LIST, -1, RESP_SUCCESS);
 }
 
 void handle_create_group(int client_sock, const json &request)
@@ -903,7 +964,8 @@ void handle_create_group(int client_sock, const json &request)
     Session *session = find_session_by_socket(client_sock);
     if (!session)
     {
-        send_response(client_sock, 401, "You are not authenticated");
+        send_response(client_sock, 401, "You are not logged in");
+        log_activity(g_db, -1, ACT_CREATE_GROUP, -1, ERR_NOT_LOGGED_IN);
         return;
     }
 
@@ -914,6 +976,7 @@ void handle_create_group(int client_sock, const json &request)
         !request["data"].contains("group_name"))
     {
         send_response(client_sock, 400, "Invalid request format: Missing group_name");
+        log_activity(g_db, creator_id, ACT_CREATE_GROUP, -1, ERR_INVALID_REQUEST);
         return;
     }
 
@@ -924,11 +987,13 @@ void handle_create_group(int client_sock, const json &request)
     if (create_group(g_db, group_name, creator_id))
     {
         send_response(client_sock, 200, "Group created successfully");
+        log_activity(g_db, creator_id, ACT_CREATE_GROUP, -1, RESP_SUCCESS);
         std::cerr << "[CREATE_GROUP] Success" << std::endl;
     }
     else
     {
         send_response(client_sock, 500, "Failed to create group (database error)");
+        log_activity(g_db, creator_id, ACT_CREATE_GROUP, -1, ERR_DATABASE_ERROR);
         std::cerr << "[CREATE_GROUP] Failure: Database operation failed" << std::endl;
     }
 }
@@ -939,7 +1004,8 @@ void handle_add_to_group(int client_sock, const json &request)
     Session *session = find_session_by_socket(client_sock);
     if (!session)
     {
-        send_response(client_sock, 401, "You are not authenticated");
+        send_response(client_sock, 401, "You are not logged in");
+        log_activity(g_db, -1, ACT_ADD_TO_GROUP, -1, ERR_NOT_LOGGED_IN);
         return;
     }
 
@@ -948,9 +1014,10 @@ void handle_add_to_group(int client_sock, const json &request)
     // 2. Kiểm tra và lấy tham số từ JSON
     if (!request.contains("data") ||
         !request["data"].contains("group_name") ||
-        !request["data"].contains("target_username")) // Đổi từ "username" thành "target_username" để rõ ràng hơn
+        !request["data"].contains("target_username"))
     {
         send_response(client_sock, 400, "Invalid request format: Missing group_name or target_username");
+        log_activity(g_db, requester_id, ACT_ADD_TO_GROUP, -1, ERR_INVALID_REQUEST);
         return;
     }
 
@@ -962,6 +1029,7 @@ void handle_add_to_group(int client_sock, const json &request)
     if (group_id == -1)
     {
         send_response(client_sock, 404, "Group not found");
+        log_activity(g_db, requester_id, ACT_ADD_TO_GROUP, group_id, ERR_GROUP_NOT_FOUND);
         return;
     }
 
@@ -970,6 +1038,7 @@ void handle_add_to_group(int client_sock, const json &request)
     if (target_user_id == -1)
     {
         send_response(client_sock, 404, "Target user not found");
+        log_activity(g_db, requester_id, ACT_ADD_TO_GROUP, target_user_id, ERR_USER_NOT_FOUND);
         return;
     }
 
@@ -977,6 +1046,7 @@ void handle_add_to_group(int client_sock, const json &request)
     if (!is_group_owner(g_db, group_id, requester_id))
     {
         send_response(client_sock, 403, "Permission denied: Only the group owner can add members");
+        log_activity(g_db, requester_id, ACT_ADD_TO_GROUP, group_id, ERR_NOT_GROUP_OWNER);
         return;
     }
 
@@ -984,10 +1054,12 @@ void handle_add_to_group(int client_sock, const json &request)
     if (add_group_member(g_db, group_id, target_user_id))
     {
         send_response(client_sock, 200, "User added to group successfully");
+        log_activity(g_db, requester_id, ACT_ADD_TO_GROUP, group_id, RESP_SUCCESS);
     }
     else
     {
         send_response(client_sock, 500, "Failed to add user to group (database error)");
+        log_activity(g_db, requester_id, ACT_ADD_TO_GROUP, group_id, ERR_DATABASE_ERROR);
     }
 }
 
@@ -997,7 +1069,8 @@ void handle_remove_from_group(int client_sock, const json &request)
     Session *session = find_session_by_socket(client_sock);
     if (!session)
     {
-        send_response(client_sock, 401, "You are not authenticated");
+        send_response(client_sock, 401, "You are not logged in");
+        log_activity(g_db, -1, ACT_REMOVE_FROM_GROUP, -1, ERR_NOT_LOGGED_IN);
         return;
     }
     int requester_id = session->user_id;
@@ -1008,6 +1081,7 @@ void handle_remove_from_group(int client_sock, const json &request)
         !request["data"].contains("target_username"))
     {
         send_response(client_sock, 400, "Invalid request format: Missing group_name or target_username");
+        log_activity(g_db, requester_id, ACT_REMOVE_FROM_GROUP, -1, ERR_INVALID_REQUEST);
         return;
     }
 
@@ -1019,6 +1093,7 @@ void handle_remove_from_group(int client_sock, const json &request)
     if (group_id == -1)
     {
         send_response(client_sock, 404, "Group not found");
+        log_activity(g_db, requester_id, ACT_REMOVE_FROM_GROUP, group_id, ERR_GROUP_NOT_FOUND);
         return;
     }
 
@@ -1026,6 +1101,7 @@ void handle_remove_from_group(int client_sock, const json &request)
     if (target_user_id == -1)
     {
         send_response(client_sock, 404, "Target user not found");
+        log_activity(g_db, requester_id, ACT_REMOVE_FROM_GROUP, target_user_id, ERR_USER_NOT_FOUND);
         return;
     }
 
@@ -1033,6 +1109,7 @@ void handle_remove_from_group(int client_sock, const json &request)
     if (requester_id == target_user_id)
     {
         send_response(client_sock, 400, "You cannot remove yourself. Please use the LEAVE_GROUP command.");
+        log_activity(g_db, requester_id, ACT_REMOVE_FROM_GROUP, target_user_id, ERR_CANNOT_REMOVE_SELF);
         return;
     }
 
@@ -1040,6 +1117,7 @@ void handle_remove_from_group(int client_sock, const json &request)
     if (!is_group_owner(g_db, group_id, requester_id))
     {
         send_response(client_sock, 403, "Permission denied: Only group admin or owner can remove members");
+        log_activity(g_db, requester_id, ACT_REMOVE_FROM_GROUP, group_id, ERR_NOT_GROUP_OWNER);
         return;
     }
 
@@ -1047,6 +1125,7 @@ void handle_remove_from_group(int client_sock, const json &request)
     if (!is_group_member(g_db, group_id, target_user_id))
     {
         send_response(client_sock, 404, "Target user is not a member of this group");
+        log_activity(g_db, requester_id, ACT_REMOVE_FROM_GROUP, target_user_id, ERR_NOT_GROUP_MEMBER);
         return;
     }
 
@@ -1054,10 +1133,12 @@ void handle_remove_from_group(int client_sock, const json &request)
     if (remove_group_member(g_db, group_id, target_user_id))
     {
         send_response(client_sock, 200, "User removed from group successfully");
+        log_activity(g_db, requester_id, ACT_REMOVE_FROM_GROUP, group_id, RESP_SUCCESS);
     }
     else
     {
         send_response(client_sock, 500, "Failed to remove user from group (database error)");
+        log_activity(g_db, requester_id, ACT_REMOVE_FROM_GROUP, group_id, ERR_DATABASE_ERROR);
     }
 }
 
@@ -1067,7 +1148,8 @@ void handle_leave_group(int client_sock, const json &request)
     Session *session = find_session_by_socket(client_sock);
     if (!session)
     {
-        send_response(client_sock, 401, "You are not authenticated");
+        send_response(client_sock, 401, "You are not logged in");
+        log_activity(g_db, -1, ACT_LEAVE_GROUP, -1, ERR_NOT_LOGGED_IN);
         return;
     }
     int user_id = session->user_id;
@@ -1077,6 +1159,7 @@ void handle_leave_group(int client_sock, const json &request)
         !request["data"].contains("group_name"))
     {
         send_response(client_sock, 400, "Invalid request format: Missing group_name");
+        log_activity(g_db, user_id, ACT_LEAVE_GROUP, -1, ERR_INVALID_REQUEST);
         return;
     }
 
@@ -1087,6 +1170,7 @@ void handle_leave_group(int client_sock, const json &request)
     if (group_id == -1)
     {
         send_response(client_sock, 404, "Group not found");
+        log_activity(g_db, user_id, ACT_LEAVE_GROUP, -1, ERR_GROUP_NOT_FOUND);
         return;
     }
 
@@ -1094,6 +1178,7 @@ void handle_leave_group(int client_sock, const json &request)
     if (!is_group_member(g_db, group_id, user_id))
     {
         send_response(client_sock, 404, "You are not a member of this group");
+        log_activity(g_db, user_id, ACT_LEAVE_GROUP, group_id, ERR_NOT_GROUP_MEMBER);
         return;
     }
 
@@ -1104,10 +1189,12 @@ void handle_leave_group(int client_sock, const json &request)
         if (delete_group(g_db, group_id))
         {
             send_response(client_sock, 200, "You left the group and the group was dissolved (Owner left)");
+            log_activity(g_db, user_id, ACT_LEAVE_GROUP, group_id, RESP_SUCCESS);
         }
         else
         {
             send_response(client_sock, 500, "Failed to dissolve the group");
+            log_activity(g_db, user_id, ACT_LEAVE_GROUP, group_id, ERR_DATABASE_ERROR);
         }
     }
     else
@@ -1116,10 +1203,12 @@ void handle_leave_group(int client_sock, const json &request)
         if (remove_group_member(g_db, group_id, user_id))
         {
             send_response(client_sock, 200, "You left the group successfully");
+            log_activity(g_db, user_id, ACT_LEAVE_GROUP, group_id, RESP_SUCCESS);
         }
         else
         {
             send_response(client_sock, 500, "Failed to leave the group");
+            log_activity(g_db, user_id, ACT_LEAVE_GROUP, group_id, ERR_DATABASE_ERROR);
         }
     }
 }
@@ -1129,7 +1218,8 @@ void handle_get_group_list(int client_sock, const json &request)
     Session *session = find_session_by_socket(client_sock);
     if (!session)
     {
-        send_response(client_sock, 401, "You are not authenticated");
+        send_response(client_sock, 401, "You are not logged in");
+        log_activity(g_db, -1, ACT_GET_GROUP_LIST, -1, ERR_NOT_LOGGED_IN);
         return;
     }
     int user_id = session->user_id;
@@ -1147,48 +1237,47 @@ void handle_get_group_list(int client_sock, const json &request)
     }
     std::string response_str = response.dump();
     send_json_packet(client_sock, response_str.c_str());
+    log_activity(g_db, user_id, ACT_GET_GROUP_LIST, -1, RESP_SUCCESS);
 }
 
 void handle_get_group_messages(int client_sock, const json &request)
 {
-    // 1. Get session of requester
     Session *session = find_session_by_socket(client_sock);
     if (!session)
     {
-        send_response(client_sock, 401, "You are not authenticated");
+        send_response(client_sock, 401, "You are not logged in");
+        log_activity(g_db, -1, ACT_GET_GROUP_MESSAGES, -1, ERR_NOT_LOGGED_IN);
         return;
     }
 
     int user_id = session->user_id;
 
-    // 2. Validate request parameters
     if (!request.contains("data") || !request["data"].contains("group_name"))
     {
         send_response(client_sock, 400, "Invalid request format: Missing group_name");
+        log_activity(g_db, user_id, ACT_GET_GROUP_MESSAGES, -1, ERR_INVALID_REQUEST);
         return;
     }
 
     std::string group_name = request["data"]["group_name"];
 
-    // 3. Get group ID from group name
     int group_id = get_group_id_by_name(g_db, group_name);
     if (group_id == -1)
     {
         send_response(client_sock, 404, "Group not found");
+        log_activity(g_db, user_id, ACT_GET_GROUP_MESSAGES, -1, ERR_GROUP_NOT_FOUND);
         return;
     }
 
-    // 4. Check if user is a member of the group
     if (!is_group_member(g_db, group_id, user_id))
     {
         send_response(client_sock, 403, "You are not a member of this group");
+        log_activity(g_db, user_id, ACT_GET_GROUP_MESSAGES, group_id, ERR_NOT_GROUP_MEMBER);
         return;
     }
 
-    // 5. Get all messages for the group
-    auto messages = get_group_messages(g_db, group_id);
+    auto messages = get_group_messages(g_db, user_id, group_id);
 
-    // 6. Build response
     json response;
     response["type"] = 2405;
     response["data"]["group_name"] = group_name;
@@ -1205,6 +1294,7 @@ void handle_get_group_messages(int client_sock, const json &request)
 
     std::string response_str = response.dump();
     send_json_packet(client_sock, response_str.c_str());
+    log_activity(g_db, user_id, ACT_GET_GROUP_MESSAGES, group_id, RESP_SUCCESS);
 }
 
 void handle_get_offline_messages(int client_sock, const json &request)

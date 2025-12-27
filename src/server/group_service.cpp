@@ -250,6 +250,7 @@ std::vector<Group> get_all_group(sqlite3 *db, int user_id)
     {
         std::cerr << "❌ Prepare failed (get_all_group): "
                   << sqlite3_errmsg(db) << std::endl;
+        log_activity(db, user_id, ACT_GET_GROUP_LIST, -1, ERR_DATABASE_ERROR);
         return groups;
     }
 
@@ -299,7 +300,7 @@ bool send_group_message(sqlite3 *db, const int sender_id, const int group_id, co
 }
 
 // Get all messages for a group
-std::vector<GroupMessage> get_group_messages(sqlite3 *db, int group_id)
+std::vector<GroupMessage> get_group_messages(sqlite3 *db, int user_id, int group_id)
 {
     std::vector<GroupMessage> messages;
     sqlite3_stmt *stmt;
@@ -316,6 +317,7 @@ std::vector<GroupMessage> get_group_messages(sqlite3 *db, int group_id)
     {
         std::cerr << "❌ Prepare failed (get_group_messages): "
                   << sqlite3_errmsg(db) << std::endl;
+        log_activity(db, user_id, ACT_GET_GROUP_MESSAGES, group_id, ERR_DATABASE_ERROR);
         return messages;
     }
 

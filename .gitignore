@@ -1,6 +1,7 @@
 # Executables
 /server
 /client
+database/chat.db
 init_db
 reset-db
 .vscode

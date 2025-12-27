@@ -22,6 +22,7 @@ std::vector<FriendRequestInfo> get_all_friend_requests(sqlite3* db, const int re
   {
     std::cerr << "❌ Prepare failed (get_all_friend_requests): "
               << sqlite3_errmsg(db) << std::endl;
+    log_activity(db, receiver_id, ACT_GET_FRIEND_REQUESTS, -1, ERR_DATABASE_ERROR);
     return requests;
   }
 
@@ -48,9 +49,10 @@ std::vector<FriendRequestInfo> get_all_friend_requests(sqlite3* db, const int re
 bool friend_request_exists(sqlite3* db, const int sender, const int receiver)
 {
   const char *sql =
-      "SELECT 1 FROM friend_requests "
-      "WHERE sender_id = ? AND receiver_id = ?"
-      "LIMIT 1;";
+    "SELECT 1 FROM friend_requests "
+    "WHERE (sender_id = ? AND receiver_id = ?) "
+    "   OR (sender_id = ? AND receiver_id = ?) "
+    "LIMIT 1;";
 
   sqlite3_stmt *stmt;
   bool exists = false;
@@ -66,6 +68,8 @@ bool friend_request_exists(sqlite3* db, const int sender, const int receiver)
   // Bind parameters
   sqlite3_bind_int(stmt, 1, sender);
   sqlite3_bind_int(stmt, 2, receiver);
+  sqlite3_bind_int(stmt, 3, receiver);
+  sqlite3_bind_int(stmt, 4, sender);
 
   // Execute
   if (sqlite3_step(stmt) == SQLITE_ROW)
@@ -294,6 +298,7 @@ std::vector<FriendInfo> get_all_friends(sqlite3* db, const int user_id)
   {
     std::cerr << "❌ Prepare failed (get_all_friends): "
               << sqlite3_errmsg(db) << std::endl;
+    log_activity(db, user_id, ACT_GET_FRIEND_LIST, -1, ERR_DATABASE_ERROR);
     return friends;
   }
 

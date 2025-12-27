@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <sqlite3.h>
+#include "write_log.h"
 
 struct FriendInfo
 {
