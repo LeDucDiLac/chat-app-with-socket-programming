@@ -57,6 +57,29 @@ int get_user_id_by_username(sqlite3* db, const std::string& username) {
     return userId;   // -1 nếu không tìm thấy
 }
 
+char* get_username_by_id(sqlite3* db, int user_id) {
+    const char *sql = "SELECT username FROM accounts WHERE id = ? LIMIT 1;";
+    sqlite3_stmt *stmt;
+    char* username = nullptr;
+
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        std::cerr << "Prepare failed: " << sqlite3_errmsg(db) << std::endl;
+        return nullptr;
+    }
+
+    sqlite3_bind_int(stmt, 1, user_id);
+
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        const unsigned char* text = sqlite3_column_text(stmt, 0);
+        if (text) {
+            username = strdup(reinterpret_cast<const char*>(text));
+        }
+    }
+
+    sqlite3_finalize(stmt);
+    return username;
+}
+
 /**
  * Register a new user
  * Returns: DB_SUCCESS, DB_USER_EXISTS, or DB_ERROR
