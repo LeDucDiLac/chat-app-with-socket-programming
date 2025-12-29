@@ -24,7 +24,8 @@ bool in_chat_mode = false;
 int current_chat_partner_id = -1;
 
 // Cached friend list
-struct FriendInfo {
+struct FriendInfo
+{
     int id;
     std::string username;
     std::string status;
@@ -62,9 +63,12 @@ void *receive_thread(void *arg)
             switch (type)
             {
             case 2000: // RESPONSE
-                if (!in_chat_mode) {
+                if (!in_chat_mode)
+                {
                     std::cout << "\n[SERVER] " << response["data"]["message"] << std::endl;
-                } else {
+                }
+                else
+                {
                     std::cout << "> ";
                 }
                 break;
@@ -74,16 +78,20 @@ void *receive_thread(void *arg)
                 int sender_id = response["data"]["sender_id"];
                 std::string sender_name = response["data"]["sender_username"];
                 std::string content = response["data"]["content"];
-                
-                if (in_chat_mode && current_chat_partner_id == sender_id) {
+
+                if (in_chat_mode && current_chat_partner_id == sender_id)
+                {
                     // If we are chatting with this person, just print the message
                     std::cout << sender_name << ": " << content << std::endl;
                     std::cout << "> ";
-                } else {
+                }
+                else
+                {
                     // Otherwise print notification
                     std::cout << "\n[NEW MESSAGE] From " << sender_name
                               << ": " << content << std::endl;
-                    if (!in_chat_mode) std::cout << "> " ;
+                    if (!in_chat_mode)
+                        std::cout << "> ";
                 }
                 break;
             }
@@ -95,55 +103,82 @@ void *receive_thread(void *arg)
                 break;
 
             case 2003: // FRIEND_REQUEST_RECEIVED
-                std::cout << "\n[FRIEND REQUEST] From " << std::endl;
-                for (const auto &req : response["data"]["friend_requests"])
+                std::cout << "\n[FRIEND REQUEST]" << std::endl;
+                if (response["data"]["friend_requests"].empty())
                 {
-                    std::cout << "  - " << req["username"].get<std::string>()
-                              << " [" << req["timestamp"].get<std::string>() << "]" << std::endl;
+                    std::cout << " No pending friend requests." << std::endl;
+                }
+                else
+                {
+                    for (const auto &req : response["data"]["friend_requests"])
+                    {
+                        std::cout << "  - " << req["username"].get<std::string>()
+                                  << " [" << req["timestamp"].get<std::string>() << "]" << std::endl;
+                    }
                 }
                 break;
 
             case 2004: // FRIEND_LIST_DATA
-                std::cout << "\n[FRIEND LIST]:" << std::endl;
+                std::cout << "\n[FRIEND LIST]" << std::endl;
                 pthread_mutex_lock(&friends_cache_mutex);
                 cached_friends.clear();
-                for (const auto &friend_data : response["data"]["friends"])
+
+                if (response["data"]["friends"].empty())
                 {
-                    FriendInfo info;
-                    info.id = friend_data["id"];
-                    info.username = friend_data["username"].get<std::string>();
-                    info.status = friend_data["user_state"].get<std::string>();
-                    cached_friends.push_back(info);
-                    std::cout << "  [ID: " << info.id << "] " << info.username
-                              << " (" << info.status << ")" << std::endl;
+                    std::cout << "  You have no friends yet. Add some friends to get started!" << std::endl;
+                }
+                else
+                {
+                    for (const auto &friend_data : response["data"]["friends"])
+                    {
+                        FriendInfo info;
+                        info.id = friend_data["id"];
+                        info.username = friend_data["username"].get<std::string>();
+                        info.status = friend_data["user_state"].get<std::string>();
+                        cached_friends.push_back(info);
+                        std::cout << "  [ID: " << info.id << "] " << info.username
+                                  << " (" << info.status << ")" << std::endl;
+                    }
                 }
                 pthread_mutex_unlock(&friends_cache_mutex);
                 break;
-            
-                case 2400: // FRIEND_LIST_DATA
-                std::cout << "\n[GROUP LIST]:" << std::endl;
-                for (const auto &group_data : response["data"]["groups"])
+
+            case 2400: // GROUP_LIST_DATA
+                std::cout << "\n[GROUP LIST]" << std::endl;
+                if (response["data"]["groups"].empty())
                 {
-                    std::cout << "  - " << group_data["group_name"].get<std::string>()
-                              << " (" << group_data["role"].get<std::string>() << ")" << std::endl;
+                    std::cout << "  You are not in any groups yet. Create or join a group!" << std::endl;
+                }
+                else
+                {
+                    for (const auto &group_data : response["data"]["groups"])
+                    {
+                        std::cout << "  - " << group_data["group_name"].get<std::string>()
+                                  << " (" << group_data["role"].get<std::string>() << ")" << std::endl;
+                    }
                 }
                 break;
 
-            case 2005: // MESSAGE_HISTORY 
-                if (response["data"].contains("messages")) {
-                    if (!in_chat_mode) std::cout << "\n[MESSAGES]:" << std::endl;
+            case 2005: // MESSAGE_HISTORY
+                if (response["data"].contains("messages"))
+                {
+                    if (!in_chat_mode)
+                        std::cout << "\n[MESSAGES]:" << std::endl;
                     for (const auto &msg : response["data"]["messages"])
                     {
-                            int sender_id = msg["sender_id"];
-                            if (sender_id == current_chat_partner_id) {
-                                std::cout << "Partner: " << msg["content"].get<std::string>() << std::endl;
-                            } else {
-                                std::cout << "You: " << msg["content"].get<std::string>() << std::endl;
-                            }
-                        
+                        int sender_id = msg["sender_id"];
+                        if (sender_id == current_chat_partner_id)
+                        {
+                            std::cout << "Partner: " << msg["content"].get<std::string>() << std::endl;
+                        }
+                        else
+                        {
+                            std::cout << "You: " << msg["content"].get<std::string>() << std::endl;
+                        }
                     }
-                    if (in_chat_mode) {
-                        std::cout << "> " ;
+                    if (in_chat_mode)
+                    {
+                        std::cout << "> ";
                     }
                 }
                 break;
@@ -152,7 +187,7 @@ void *receive_thread(void *arg)
                 std::cout << "\n[GROUP MESSAGES - " << response["data"]["group_name"].get<std::string>() << "]:" << std::endl;
                 for (const auto &msg : response["data"]["messages"])
                 {
-                    std::cout << "  " << msg["sender_username"].get<std::string>()
+                    std::cout << "  - " << msg["sender_username"].get<std::string>()
                               << ": " << msg["content"].get<std::string>()
                               << " [" << msg["timestamp"].get<std::string>() << "]" << std::endl;
                 }
@@ -164,15 +199,17 @@ void *receive_thread(void *arg)
                 break;
 
             default:
-                if (!in_chat_mode) {
+                if (!in_chat_mode)
+                {
                     std::cout << "\n[SERVER] Unknown response type: " << type << std::endl;
                 }
                 break;
             }
-            
+
             // Output prompt after handling response (except for special cases)
-            if (!in_chat_mode && type != 2001 && type != 2005) {
-                std::cout << "> " ;
+            if (!in_chat_mode && type != 2001 && type != 2005)
+            {
+                std::cout << "> ";
             }
         }
         catch (json::exception &e)
@@ -292,22 +329,22 @@ void handle_message_menu()
     case 1: // Chat with Friend
     {
         // First, fetch and display friend list
-        request["type"] = 1305; 
+        request["type"] = 1305;
         request["data"] = json::object();
         send_request(request);
-        
+
         // We pause here for the listening thread to display friendlist
         sleep(1);
-        
+
         // Check if we have friends
         pthread_mutex_lock(&friends_cache_mutex);
-        if (cached_friends.empty()) {
+        if (cached_friends.empty())
+        {
             pthread_mutex_unlock(&friends_cache_mutex);
-            std::cout << "You have no friends yet. Add friends first!" << std::endl;
             return;
         }
         pthread_mutex_unlock(&friends_cache_mutex);
-        
+
         int receiver_id;
         std::cout << "\nEnter Friend ID to chat with: ";
         if (!(std::cin >> receiver_id))
@@ -318,21 +355,24 @@ void handle_message_menu()
             return;
         }
         std::cin.ignore(10000, '\n');
-        
+
         // Validate that the ID is in friend list
         bool is_friend = false;
         std::string friend_name;
         pthread_mutex_lock(&friends_cache_mutex);
-        for (const auto& f : cached_friends) {
-            if (f.id == receiver_id) {
+        for (const auto &f : cached_friends)
+        {
+            if (f.id == receiver_id)
+            {
                 is_friend = true;
                 friend_name = f.username;
                 break;
             }
         }
         pthread_mutex_unlock(&friends_cache_mutex);
-        
-        if (!is_friend) {
+
+        if (!is_friend)
+        {
             std::cout << "Error: ID " << receiver_id << " is not in your friend list!" << std::endl;
             return;
         }
@@ -340,10 +380,10 @@ void handle_message_menu()
         // Enter chat mode
         in_chat_mode = true;
         current_chat_partner_id = receiver_id;
-        
+
         std::cout << "\n--- Chat Mode with " << friend_name << " (ID: " << receiver_id << ") ---" << std::endl;
         std::cout << "Type '/quit' to exit chat mode." << std::endl;
-        
+
         // Fetch history
         request["type"] = 1005; // GET_MESSAGE_HISTORY
         request["data"]["target_id"] = receiver_id;
@@ -352,15 +392,18 @@ void handle_message_menu()
 
         sleep(1);
         // Chat loop
-        while (true) {
+        while (true)
+        {
             std::getline(std::cin, input);
-            
-            if (input == "/quit") {
+
+            if (input == "/quit")
+            {
                 break;
             }
-            
-            if (input.empty()) continue;
-            
+
+            if (input.empty())
+                continue;
+
             // Send message
             json msg_req;
             msg_req["type"] = 1003;
