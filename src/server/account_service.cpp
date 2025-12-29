@@ -1,6 +1,5 @@
 #include "account_service.h"
 #include <cstring>
-#include <ctime>
 #include <iostream>
 
 /**
@@ -46,7 +45,6 @@ int get_user_id_by_username(sqlite3* db, const std::string& username) {
         return -1;
     }
 
-    // Bind username vào ?
     sqlite3_bind_text(stmt, 1, username.c_str(), -1, SQLITE_STATIC);
 
     if (sqlite3_step(stmt) == SQLITE_ROW) {
@@ -54,7 +52,7 @@ int get_user_id_by_username(sqlite3* db, const std::string& username) {
     }
 
     sqlite3_finalize(stmt);
-    return userId;   // -1 nếu không tìm thấy
+    return userId;   
 }
 
 char* get_username_by_id(sqlite3* db, int user_id) {
@@ -103,14 +101,13 @@ int register_user(sqlite3* db, const std::string& username, const std::string& p
     
     if (rc == SQLITE_ROW)
     {
-        // User already exists
         return DB_USER_EXISTS;
     }
     
     // Insert new user
     const char* insert_sql = 
-        "INSERT INTO accounts (username, password, account_status, user_state, created_at) "
-        "VALUES (?, ?, 'active', 'offline', ?);";
+        "INSERT INTO accounts (username, password, account_status, user_state) "
+        "VALUES (?, ?, 'active', 'offline');";
     
     if (sqlite3_prepare_v2(db, insert_sql, -1, &stmt, nullptr) != SQLITE_OK)
     {
@@ -118,10 +115,8 @@ int register_user(sqlite3* db, const std::string& username, const std::string& p
         return DB_ERROR;
     }
     
-    time_t now = time(nullptr);
     sqlite3_bind_text(stmt, 1, username.c_str(), -1, SQLITE_TRANSIENT);
     sqlite3_bind_text(stmt, 2, password.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_int64(stmt, 3, now);
     
     rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);

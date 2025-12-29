@@ -101,6 +101,21 @@ int get_direct_message_history(sqlite3* db, int user_id1, int user_id2,
  */
 int mark_messages_read(sqlite3* db, int user_id, int sender_id);
 
+/**
+ * Get all unread offline messages for a user
+ * 
+ * @param db Database connection handle
+ * @param user_id ID of the user
+ * @param messages Output vector to store unread messages
+ * 
+ * @return DB_SUCCESS on success
+ *         DB_ERROR on database error
+ * 
+ * @note Returns messages where receiver_id=user_id and is_read=0
+ * @note Messages are sorted by timestamp ascending (oldest first)
+ * @note Also retrieves sender username for display purposes
+ */
+int get_unread_messages(sqlite3* db, int user_id, std::vector<Message>& messages);
 
 
 /**

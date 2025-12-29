@@ -199,14 +199,27 @@ void *client_handler(void *arg)
         }
     }
 
-    // Cleanup: remove from sessions
+    // Cleanup: remove from sessions and update database
     pthread_mutex_lock(&sessions_mutex);
     for (auto it = active_sessions.begin(); it != active_sessions.end(); ++it)
     {
         if (it->socket_fd == client_sock)
         {
+            int user_id = it->user_id;
+            std::string username = it->username;
+            
             active_sessions.erase(it);
-            break;
+            pthread_mutex_unlock(&sessions_mutex);
+            
+            // Update user state to offline in database
+            update_user_state(g_db, user_id, "offline");
+            
+            std::cout << "[SERVER] Client disconnected without logout. Updated database: " 
+                      << username << " (ID: " << user_id << ") set to offline" << std::endl;
+            
+            close(client_sock);
+            log_activity(g_db, user_id, ACT_LOGOUT, -1, RESP_SUCCESS);
+            return nullptr;
         }
     }
     pthread_mutex_unlock(&sessions_mutex);
@@ -439,6 +452,29 @@ void handle_login(int client_sock, const json &request)
                 {"type", 2000},
                 {"data", {{"status", 200}, {"message", "Login successful"}, {"user_id", user_id}, {"username", username}}}};
             send_json_packet(client_sock, response.dump().c_str());
+            
+            // Send all unread offline messages
+            std::vector<Message> unread_messages;
+            if (get_unread_messages(g_db, user_id, unread_messages) == DB_SUCCESS) {
+                if (!unread_messages.empty()) {
+                    std::cout << "[LOGIN] Sending " << unread_messages.size() 
+                              << " unread messages to " << username << std::endl;
+                    
+                    for (const auto& msg : unread_messages) {
+                        json notification = {
+                            {"type", 2001},  // MESSAGE_RECEIVED
+                            {"data", {
+                                {"sender_id", msg.sender_id},
+                                {"sender_username", msg.sender_username},
+                                {"content", msg.content},
+                                {"timestamp", msg.timestamp}
+                            }}
+                        };
+                        send_json_packet(client_sock, notification.dump().c_str());
+                        
+                    }
+                }
+            }
 
             std::cout << "[LOGIN] Success: " << username << " (ID: " << user_id << ")" << std::endl;
         }

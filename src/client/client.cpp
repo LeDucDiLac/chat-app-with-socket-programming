@@ -292,8 +292,7 @@ void handle_message_menu()
     case 1: // Chat with Friend
     {
         // First, fetch and display friend list
-        std::cout << "\nFetching your friend list..." << std::endl;
-        request["type"] = 1305; // GET_FRIEND_LIST
+        request["type"] = 1305; 
         request["data"] = json::object();
         send_request(request);
         
