@@ -124,7 +124,7 @@ int send_json_packet(int socket_fd, const char *json_str)
         return -1;
     }
 
-    printf("[SENT] %u bytes: %s\n", json_length, json_str);
+    //printf("[SENT] %u bytes: %s\n", json_length, json_str);
     return 0;
 }
 
@@ -203,6 +203,6 @@ int receive_json_packet(int socket_fd, char *buffer, size_t buffer_size)
     // Null-terminate the JSON string
     buffer[json_length] = '\0';
 
-    printf("[RECV] %u bytes: %s\n", json_length, buffer);
+    //printf("[RECV] %u bytes: %s\n", json_length, buffer);
     return json_length;
 }
