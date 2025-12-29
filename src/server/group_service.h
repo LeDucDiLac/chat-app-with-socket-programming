@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <sqlite3.h>
+#include "write_log.h"
 
 struct Group
 {
@@ -33,6 +34,6 @@ bool delete_group(sqlite3* db, int group_id);
 std::vector<Group> get_all_group(sqlite3* db, int user_id);
 
 bool send_group_message(sqlite3* db, const int sender_id, const int group_id, const std::string& content);
-std::vector<GroupMessage> get_group_messages(sqlite3* db, int group_id);
+std::vector<GroupMessage> get_group_messages(sqlite3* db, int user_id, int group_id);
 
 #endif // GROUP_SERVICE_H

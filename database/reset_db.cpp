@@ -123,9 +123,10 @@ void create_tables(sqlite3 *db)
                 "    log_id INTEGER PRIMARY KEY AUTOINCREMENT,"
                 "    user_id INTEGER,"
                 "    action_type TEXT NOT NULL,"
-                "    details TEXT,"
-                "    timestamp INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP,"
-                "    FOREIGN KEY(user_id) REFERENCES accounts(id) ON DELETE SET NULL"
+                "    target_id INTEGER,"
+                "    result TEXT NOT NULL,"
+                "    timestamp INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                // "    FOREIGN KEY(user_id) REFERENCES accounts(id) ON DELETE SET NULL"
                 ");",
                 "activity_logs table created");
 }
@@ -234,23 +235,23 @@ void seed_data(sqlite3 *db)
     execute_sql(db, insert_group_messages.c_str(), "group_messages seeded");
 
     // Insert activity logs
-    std::string insert_activity_logs =
-        "INSERT OR IGNORE INTO activity_logs (user_id, action_type, details, timestamp) VALUES "
-        "(2, 'login', 'User logged in from 127.0.0.1', " +
-        std::to_string(now - 3600) + "),"
-                                     "(1, 'send_message', 'Sent message to user 2', " +
-        std::to_string(now - 3500) + "),"
-                                     "(3, 'join_group', 'Joined group 1', " +
-        std::to_string(week_ago) + "),"
-                                   "(2, 'send_friend_request', 'Sent friend request to user 5', " +
-        std::to_string(week_ago) + "),"
-                                   "(4, 'create_group', 'Created group 3', " +
-        std::to_string(day_ago) + "),"
-                                  "(1, 'accept_friend_request', 'Accepted friend request from user 4', " +
-        std::to_string(week_ago) + "),"
-                                   "(3, 'logout', 'User logged out', " +
-        std::to_string(now - 7200) + ");";
-    execute_sql(db, insert_activity_logs.c_str(), "activity_logs seeded");
+    // std::string insert_activity_logs =
+    //     "INSERT OR IGNORE INTO activity_logs (user_id, action_type, details, timestamp) VALUES "
+    //     "(2, 'login', 'User logged in from 127.0.0.1', " +
+    //     std::to_string(now - 3600) + "),"
+    //                                  "(1, 'send_message', 'Sent message to user 2', " +
+    //     std::to_string(now - 3500) + "),"
+    //                                  "(3, 'join_group', 'Joined group 1', " +
+    //     std::to_string(week_ago) + "),"
+    //                                "(2, 'send_friend_request', 'Sent friend request to user 5', " +
+    //     std::to_string(week_ago) + "),"
+    //                                "(4, 'create_group', 'Created group 3', " +
+    //     std::to_string(day_ago) + "),"
+    //                               "(1, 'accept_friend_request', 'Accepted friend request from user 4', " +
+    //     std::to_string(week_ago) + "),"
+    //                                "(3, 'logout', 'User logged out', " +
+    //     std::to_string(now - 7200) + ");";
+    // execute_sql(db, insert_activity_logs.c_str(), "activity_logs seeded");
 }
 
 void display_summary(sqlite3 *db)

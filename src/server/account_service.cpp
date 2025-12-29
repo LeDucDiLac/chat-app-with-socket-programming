@@ -220,37 +220,3 @@ int update_user_state(sqlite3* db, int user_id, const std::string& state)
     std::cout << "[DB] User " << user_id << " state updated to: " << state << std::endl;
     return DB_SUCCESS;
 }
-
-/**
- * Log user activity
- * Returns: DB_SUCCESS or DB_ERROR
- */
-int log_activity(sqlite3* db, int user_id, const std::string& action_type, const std::string& details)
-{
-    const char* sql = 
-        "INSERT INTO activity_logs (user_id, action_type, details, timestamp) VALUES (?, ?, ?, ?);";
-    sqlite3_stmt* stmt;
-    
-    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
-    {
-        std::cerr << "[DB] Failed to prepare log statement: " << sqlite3_errmsg(db) << std::endl;
-        return DB_ERROR;
-    }
-    
-    time_t now = time(nullptr);
-    sqlite3_bind_int(stmt, 1, user_id);
-    sqlite3_bind_text(stmt, 2, action_type.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt, 3, details.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_int64(stmt, 4, now);
-    
-    int rc = sqlite3_step(stmt);
-    sqlite3_finalize(stmt);
-    
-    if (rc != SQLITE_DONE)
-    {
-        std::cerr << "[DB] Failed to log activity: " << sqlite3_errmsg(db) << std::endl;
-        return DB_ERROR;
-    }
-    
-    return DB_SUCCESS;
-}

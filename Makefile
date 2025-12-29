@@ -21,6 +21,7 @@ ACCOUNT_SERVICE = $(SERVER_DIR)/account_service.cpp
 FRIEND_SERVICE = $(SERVER_DIR)/friend_service.cpp
 GROUP_SERVICE = $(SERVER_DIR)/group_service.cpp
 CHAT_SERVICE = $(SERVER_DIR)/chat_service.cpp
+WRITE_LOG_SRC = $(SERVER_DIR)/write_log.cpp
 DATABASE_RESET = $(DATABASE_DIR)/reset_db.cpp # Vẫn giữ khai báo này
 
 TEST_JSON_SRC= $(TEST_DIR)/test_json.cpp
@@ -38,9 +39,16 @@ CLIENT_BIN = client
 all: server client
 
 # Build server
-server: $(SERVER_SRC) $(PROTOCOL_SRC) $(ACCOUNT_SERVICE) $(FRIEND_SERVICE) $(GROUP_SERVICE) $(CHAT_SERVICE)
-	$(CXX) $(CXXFLAGS) -pthread $(SERVER_SRC) $(PROTOCOL_SRC) $(ACCOUNT_SERVICE) $(FRIEND_SERVICE) $(GROUP_SERVICE) $(CHAT_SERVICE) -o $(SERVER_BIN) $(LDFLAGS_SQLITE)
-
+server: $(SERVER_SRC) $(PROTOCOL_SRC) $(ACCOUNT_SERVICE) $(FRIEND_SERVICE) $(GROUP_SERVICE) $(WRITE_LOG_SRC)
+	$(CXX) $(CXXFLAGS) -pthread \
+	$(SERVER_SRC) \
+	$(PROTOCOL_SRC) \
+	$(ACCOUNT_SERVICE) \
+	$(CHAT_SERVICE) \
+	$(FRIEND_SERVICE) \
+	$(GROUP_SERVICE) \
+	$(WRITE_LOG_SRC) \
+	-o $(SERVER_BIN) $(LDFLAGS_SQLITE)
 # Build client
 client: $(CLIENT_SRC) $(PROTOCOL_SRC)
 	$(CXX) $(CXXFLAGS) -pthread $(CLIENT_SRC) $(PROTOCOL_SRC) -o $(CLIENT_BIN) $(LDFLAGS)
