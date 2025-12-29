@@ -1,0 +1,37 @@
+# Compiled binaries
+server
+client
+reset-db
+
+# Test files
+test/
+test_auth
+*.test
+
+# Object files
+*.o
+*.a
+
+# Database files (will be mounted as volume)
+database/*.db
+database/*.db-journal
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+*.md
+*.txt
+design.txt
+tasks.txt
+todo.txt
+
+# Scripts
+run_tests.sh
+reset-db
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore

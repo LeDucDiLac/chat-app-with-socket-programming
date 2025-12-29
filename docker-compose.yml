@@ -1,0 +1,15 @@
+version: "3.8"
+
+services:
+  chat-server:
+    build: .
+    container_name: chat-server
+    ports:
+      - "5500:5500"
+    volumes:
+      # Persist database on host
+      - ./database:/app/database
+      - ./src:/app/src # Mount source code
+    restart: unless-stopped
+    stdin_open: true
+    tty: true

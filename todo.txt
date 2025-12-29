@@ -1,5 +1,5 @@
 duc:
-  - fix bug ctrl c phia client ko chuyen offline
+  - fix bug ctrl c phia client ko chuyen offline: DONE
   - them chuc nang sau khi dang nhap, request tat 
     tin nhan co is_read = 0, receiver = username,
     sau do tin nhan se duoc cached tai client,

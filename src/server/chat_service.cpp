@@ -107,3 +107,51 @@ int mark_messages_read(sqlite3* db, int user_id, int sender_id) {
     sqlite3_finalize(stmt);
     return DB_SUCCESS;
 }
+
+int get_unread_messages(sqlite3* db, int user_id, std::vector<Message>& messages) {
+    const char* query = R"(
+    SELECT dm.message_id, dm.sender_id, a.username as sender_username,
+           dm.receiver_id, dm.content, dm.timestamp, dm.is_read
+    FROM direct_messages dm
+    JOIN accounts a ON dm.sender_id = a.id
+    WHERE dm.receiver_id = ? AND dm.is_read = 0
+    ORDER BY dm.timestamp ASC
+    )";
+    
+    sqlite3_stmt *stmt;
+    if (sqlite3_prepare_v2(db, query, -1, &stmt, nullptr) != SQLITE_OK) {
+        return DB_ERROR;
+    }
+    sqlite3_bind_int(stmt, 1, user_id);
+    
+    int rc;
+    while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+        Message message;
+        message.message_id = sqlite3_column_int(stmt, 0);
+        message.sender_id = sqlite3_column_int(stmt, 1);
+        
+        const unsigned char* username = sqlite3_column_text(stmt, 2);
+        message.sender_username = username ? reinterpret_cast<const char*>(username) : "";
+        
+        message.receiver_id = sqlite3_column_int(stmt, 3);
+        
+        const unsigned char* content = sqlite3_column_text(stmt, 4);
+        message.content = content ? reinterpret_cast<const char*>(content) : "";
+        
+        const unsigned char* ts = sqlite3_column_text(stmt, 5);
+        message.timestamp = ts ? reinterpret_cast<const char*>(ts) : "";
+        
+        message.is_read = sqlite3_column_int(stmt, 6);
+        message.group_id = 0;  // Direct message, not a group message
+        
+        messages.push_back(message);
+    }
+    
+    if (rc != SQLITE_DONE) {
+        sqlite3_finalize(stmt);
+        return DB_ERROR;
+    }
+    
+    sqlite3_finalize(stmt);
+    return DB_SUCCESS;
+}

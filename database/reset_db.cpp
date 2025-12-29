@@ -31,7 +31,7 @@ void create_tables(sqlite3 *db)
                 "    username TEXT UNIQUE NOT NULL,"
                 "    password TEXT NOT NULL,"
                 "    account_status TEXT DEFAULT 'active' CHECK(account_status IN ('active', 'banned')),"
-                "    user_state TEXT DEFAULT 'offline' CHECK(user_state IN ('online', 'offline', 'away')),"
+                "    user_state TEXT DEFAULT 'offline' CHECK(user_state IN ('online', 'offline')),"
                 "    created_at INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP"
                 ");",
                 "accounts table created");
@@ -144,9 +144,9 @@ void seed_data(sqlite3 *db)
         "INSERT OR IGNORE INTO accounts (username, password, account_status, user_state, created_at) VALUES "
         "('alice', 'password123', 'active', 'offline', " +
         std::to_string(week_ago) + "),"
-                                   "('bob', 'bobpass456', 'active', 'online', " +
+                                   "('bob', 'bobpass456', 'active', 'offline', " +
         std::to_string(week_ago) + "),"
-                                   "('charlie', 'charlie789', 'active', 'online', " +
+                                   "('charlie', 'charlie789', 'active', 'offline', " +
         std::to_string(week_ago) + "),"
                                    "('diana', 'diana2024', 'active', 'offline', " +
         std::to_string(day_ago) + "),"
@@ -217,7 +217,7 @@ void seed_data(sqlite3 *db)
         std::to_string(week_ago) + ", 1),"
                                    "(3, 1, 'Hi Alice!', " +
         std::to_string(day_ago) + ", 0),"
-                                  "(4, 1, 'Can we talk later?', " +
+                                  "(3, 1, 'Can we talk later?', " +
         std::to_string(day_ago) + ", 0);";
     execute_sql(db, insert_direct_messages.c_str(), "direct_messages seeded");
 
