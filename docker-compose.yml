@@ -5,7 +5,7 @@ services:
     build: .
     container_name: chat-server
     ports:
-      - "5500:5500"
+      - "0.0.0.0:5500:5500" # Bind to all interfaces (accessible via VM IP)
     volumes:
       # Persist database on host
       - ./database:/app/database

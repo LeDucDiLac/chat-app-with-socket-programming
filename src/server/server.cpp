@@ -572,6 +572,7 @@ void handle_send_message(int client_sock, const json &request)
             };
             std::string notif_str = notification.dump();
             send_json_packet(receiver_sock, notif_str.c_str());
+            mark_messages_read(g_db, receiver_id, sender_id);
         }
     } else if (result == DB_NOT_FRIENDS_TO_SEND) {
         send_response(client_sock, 403, "You are not friends with this user");

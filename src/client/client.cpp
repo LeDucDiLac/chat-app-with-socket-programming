@@ -240,7 +240,6 @@ void show_main_menu()
     std::cout << "2. Messages" << std::endl;
     std::cout << "3. Friends" << std::endl;
     std::cout << "4. Groups" << std::endl;
-    std::cout << "5. Misc" << std::endl;
     std::cout << "0. Exit" << std::endl;
     std::cout << "> ";
 }
@@ -612,37 +611,6 @@ void handle_group_menu()
     }
 }
 
-void handle_misc_menu()
-{
-    std::cout << "\n--- Misc ---" << std::endl;
-    std::cout << "1. Get Offline Messages" << std::endl;
-    std::cout << "0. Back" << std::endl;
-    std::cout << "> ";
-
-    int choice;
-    if (!(std::cin >> choice))
-    {
-        std::cin.clear();
-        std::cin.ignore(10000, '\n');
-        std::cout << "Invalid input" << std::endl;
-        return;
-    }
-    std::cin.ignore(10000, '\n');
-
-    json request;
-    switch (choice)
-    {
-    case 1:
-        request["type"] = 1014;
-        request["data"] = json::object();
-        send_request(request);
-        break;
-    case 0:
-    default:
-        break;
-    }
-}
-// --- End new menus ---
 
 int main(int argc, char *argv[])
 {
@@ -728,16 +696,13 @@ int main(int argc, char *argv[])
         case 4:
             handle_group_menu();
             break;
-        case 5:
-            handle_misc_menu();
-            break;
         default:
             std::cout << "Invalid choice" << std::endl;
             break;
         }
 
         // Give time for server response
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        sleep(1);
     }
 
     close(server_sock);
